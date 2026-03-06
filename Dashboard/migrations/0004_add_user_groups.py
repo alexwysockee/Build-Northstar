@@ -1,5 +1,5 @@
-# Generated for Build-Northstar user groups
-
+#test: for Build-Northstar user groups
+#test
 from django.db import migrations
 
 

@@ -10,3 +10,4 @@ urlpatterns = [
     path('reports/<int:report_id>/', views.report, name='report'),
     path('new_report/', views.new_report, name='new_report'),
 ]
+#test

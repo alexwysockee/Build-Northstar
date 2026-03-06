@@ -38,3 +38,4 @@ def new_report(request):
     # Display a blank or invalid form.
     context = {'form': form}
     return render(request, 'Dashboard/new_report.html', context)
+    #test

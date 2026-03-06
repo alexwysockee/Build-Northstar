@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 
 from .models import Report, Entry
 
-
+#test
 # Custom User admin so Groups are easy to assign in the admin
 class UserAdmin(BaseUserAdmin):
     filter_horizontal = ("groups", "user_permissions")
