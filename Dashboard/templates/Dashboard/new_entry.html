@@ -1,0 +1,27 @@
+{% extends "Dashboard/base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-2">
+	<ol class="breadcrumb">
+		<li class="breadcrumb-item"><a href="{% url 'Dashboard:Reports' %}">Reports</a></li>
+		<li class="breadcrumb-item"><a href="{% url 'Dashboard:report' report.id %}">{{ report.text }}</a></li>
+		<li class="breadcrumb-item active" aria-current="page">Add entry</li>
+	</ol>
+</nav>
+<h1 class="mb-3">Add new entry</h1>
+<p class="text-muted">Report: <a href="{% url 'Dashboard:report' report.id %}">{{ report.text }}</a></p>
+<form action="{% url 'Dashboard:new_entry' report.id %}" method="post" enctype="multipart/form-data">
+	{% csrf_token %}
+	<div class="mb-3">
+		<label for="id_text" class="form-label">{{ form.text.label }}</label>
+		{{ form.text }}
+		{% if form.text.errors %}<div class="text-danger small">{{ form.text.errors }}</div>{% endif %}
+	</div>
+	<div class="mb-3">
+		<label for="id_documents" class="form-label">PDF documents (optional)</label>
+		<input id="id_documents" type="file" name="documents" accept="application/pdf,.pdf" multiple class="form-control">
+		<div class="form-text">You can upload one or more PDF files.</div>
+	</div>
+	<button type="submit" class="btn btn-primary">Add entry</button>
+	<a href="{% url 'Dashboard:report' report.id %}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+{% endblock content %}

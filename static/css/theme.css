@@ -1,0 +1,136 @@
+/* Blue & White Theme */
+
+:root {
+  --theme-primary: #0d6efd;
+  --theme-primary-dark: #0a58ca;
+  --theme-light: #e7f1ff;
+  --theme-white: #ffffff;
+}
+
+body {
+  background-color: var(--theme-white);
+  background-image: url("/static/images/background.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  color: #212529;
+}
+
+/* Navbar - blue with white text (navbar-dark bg-primary) */
+.navbar.bg-primary {
+  border-bottom: 2px solid var(--theme-primary-dark);
+}
+
+.navbar .btn-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.navbar .btn-link:hover {
+  color: var(--theme-white) !important;
+}
+
+/* Main content area - subtle light blue background */
+main {
+  background-color: rgba(231, 241, 255, 0.88);
+  min-height: calc(100vh - 56px);
+}
+
+/* Tables - blue accents */
+.table {
+  background-color: var(--theme-white);
+  border: 1px solid #dee2e6;
+}
+
+.table thead th {
+  background-color: var(--theme-primary);
+  color: var(--theme-white);
+  border-color: var(--theme-primary-dark);
+}
+
+.table tbody tr:nth-of-type(even) {
+  background-color: rgba(13, 110, 253, 0.05);
+}
+
+.table tbody tr:hover {
+  background-color: rgba(13, 110, 253, 0.1);
+}
+
+/* Primary buttons */
+.btn-primary {
+  background-color: var(--theme-primary);
+  border-color: var(--theme-primary);
+}
+
+.btn-primary:hover {
+  background-color: var(--theme-primary-dark);
+  border-color: var(--theme-primary-dark);
+}
+
+/* Links */
+a {
+  color: var(--theme-primary);
+}
+
+a:hover {
+  color: var(--theme-primary-dark);
+}
+
+/* Form controls - subtle blue focus */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Last login indicators on Users page */
+.last-login-recent { color: #198754; font-weight: 500; }
+.last-login-24h { color: #b8860b; font-weight: 500; }
+.last-login-old { color: #6c757d; }
+.last-login-never { color: #6c757d; font-style: italic; }
+
+/* Dashboard revenue pie */
+.goal-pie {
+  --p: 0;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: conic-gradient(#198754 0 calc(var(--p) * 1%), #dc3545 0 100%);
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
+.goal-pie-center {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+/* Avatars */
+.avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.avatar-lg {
+  width: 96px;
+  height: 96px;
+}
+
+.avatar-placeholder {
+  background: rgba(13, 110, 253, 0.15);
+  color: #0a58ca;
+  font-weight: 700;
+}

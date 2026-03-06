@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 
-from .models import Report, Entry
+from .models import Report, Entry, SalesProduct, DailySale, EntryDocument
 
 #test
 # Custom User admin so Groups are easy to assign in the admin
@@ -15,3 +15,6 @@ admin.site.register(User, UserAdmin)
 
 admin.site.register(Report)
 admin.site.register(Entry)
+admin.site.register(EntryDocument)
+admin.site.register(SalesProduct)
+admin.site.register(DailySale)

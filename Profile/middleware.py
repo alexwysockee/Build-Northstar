@@ -12,6 +12,9 @@ class RequireLoginMiddleware:
             path = request.path
             if path.startswith("/static/") or path.startswith("/static"):
                 return self.get_response(request)
+            # Allow uploaded media (PDF attachments) to render
+            if path.startswith("/media/") or path.startswith("/media"):
+                return self.get_response(request)
             # Allow home (login) and logout pages
             if path.rstrip("/") in (settings.LOGIN_URL.rstrip("/"), "/logout"):
                 return self.get_response(request)

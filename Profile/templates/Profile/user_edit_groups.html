@@ -1,0 +1,16 @@
+{% extends "Dashboard/base.html" %}
+{% block content %}
+<h1 class="mb-3">Edit groups for {{ edit_user.username }}</h1>
+<form method="post" action="">
+	{% csrf_token %}
+	<div class="mb-3">
+		<label class="form-label">Groups</label>
+		<div class="border rounded p-2 bg-white">
+			{{ form.groups }}
+		</div>
+		{% if form.groups.errors %}<div class="text-danger small">{{ form.groups.errors }}</div>{% endif %}
+	</div>
+	<button type="submit" class="btn btn-primary">Save</button>
+	<a href="{% url 'Profile:user_list' %}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+{% endblock content %}

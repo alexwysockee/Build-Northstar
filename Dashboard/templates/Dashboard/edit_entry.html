@@ -1,0 +1,48 @@
+{% extends "Dashboard/base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-2">
+	<ol class="breadcrumb">
+		<li class="breadcrumb-item"><a href="{% url 'Dashboard:Reports' %}">Reports</a></li>
+		<li class="breadcrumb-item"><a href="{% url 'Dashboard:report' report.id %}">{{ report.text }}</a></li>
+		<li class="breadcrumb-item active" aria-current="page">Edit entry</li>
+	</ol>
+</nav>
+
+<h1 class="mb-3">Edit entry</h1>
+<p class="text-muted">Report: <a href="{% url 'Dashboard:report' report.id %}">{{ report.text }}</a></p>
+
+<form action="{% url 'Dashboard:edit_entry' entry.id %}" method="post" enctype="multipart/form-data">
+	{% csrf_token %}
+	<div class="mb-3">
+		<label for="id_text" class="form-label">{{ form.text.label }}</label>
+		{{ form.text }}
+		{% if form.text.errors %}<div class="text-danger small">{{ form.text.errors }}</div>{% endif %}
+	</div>
+	<div class="mb-3">
+		<label for="id_documents" class="form-label">Add PDF documents (optional)</label>
+		<input id="id_documents" type="file" name="documents" accept="application/pdf,.pdf" multiple class="form-control">
+		<div class="form-text">Upload one or more PDF files to attach to this entry.</div>
+	</div>
+	{% if entry.documents.all %}
+	<div class="mb-3">
+		<div class="form-label">Attached PDFs</div>
+		<ul class="mb-0">
+			{% for doc in entry.documents.all %}
+			<li class="text-nowrap">
+				<a href="{% url 'Dashboard:entry_document_inline' doc.id %}" target="_blank" rel="noopener">View PDF</a>
+				{% if can_delete_reports %}
+					<form method="post" action="{% url 'Dashboard:delete_entry_document' doc.id %}" class="d-inline" onsubmit="return confirm('Delete this PDF?');">
+						{% csrf_token %}
+						<button type="submit" class="btn btn-sm btn-outline-danger ms-2">Delete</button>
+					</form>
+				{% endif %}
+			</li>
+			{% endfor %}
+		</ul>
+	</div>
+	{% endif %}
+	<button type="submit" class="btn btn-primary">Save changes</button>
+	<a href="{% url 'Dashboard:report' report.id %}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+{% endblock content %}
+

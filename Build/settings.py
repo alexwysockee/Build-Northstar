@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from os.path import join
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +26,23 @@ SECRET_KEY = 'django-insecure-8^@$3^qrj0dmx*w9k@efaia^qlf7(zlh$3f#%i(3s-j&z6j$l0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "[::1]",
+    # Cloudflare Tunnel (trycloudflare) hostnames
+    ".trycloudflare.com",
+    "achievement-concrete-near-folders.trycloudflare.com",
+]
+
+# Needed for POST forms when accessing via tunnel
+CSRF_TRUSTED_ORIGINS = [
+    "https://achievement-concrete-near-folders.trycloudflare.com",
+    "https://*.trycloudflare.com",
+]
+
+# If you're terminating HTTPS at Cloudflare, this makes Django treat requests as secure
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Application definition
@@ -51,6 +68,9 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'Profile.middleware.RequireLoginMiddleware',
 ]
+
+# Allow embedding same-site PDFs in iframes (e.g., report entry attachments)
+X_FRAME_OPTIONS = "SAMEORIGIN"
 
 ROOT_URLCONF = 'Build.urls'
 
@@ -108,7 +128,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Denver'  # Mountain Time (MST/MDT)
 
 USE_I18N = True
 
@@ -120,7 +140,16 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-# Auth: require login site-wide; home (/) is login, redirect to dashboard after login
-LOGIN_URL = '/'
-LOGIN_REDIRECT_URL = '/dashboard/'
-LOGOUT_REDIRECT_URL = '/'
+# Media uploads (PDF attachments, etc.)
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# Auth: require login site-wide; home (/) is login, redirect to home after login
+LOGIN_URL = "/"
+LOGIN_REDIRECT_URL = "/home/"
+LOGOUT_REDIRECT_URL = "/"
+
+
+# My Settings
+
+STATICFILES_DIRS = [join(BASE_DIR, 'static')]

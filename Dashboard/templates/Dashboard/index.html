@@ -1,3 +1,58 @@
+{% extends "Dashboard/base.html" %}
+{% block content %}
+
 <p>Dashboard</p>
-<p>Dashboard for the C3 System</p>
-#test
+<p>Dashboard for the C3 Digital Transformation System</p>
+
+<div class="row">
+	<div class="col-md-6">
+<table class="table">
+	<caption>C3 Product Performance Snapshot (Sales This Month)</caption>
+	<thead>
+	<tr>
+		<th scope="col">Product</th>
+		<th scope="col">Price</th>
+		<th scope="col">Sales this month</th>
+		<th scope="col">Goal %</th>
+	</tr>
+	</thead>
+	<tbody>
+	{% for row in dashboard_rows %}
+	<tr>
+		<td scope="row">{{ row.product.name }}</td>
+		<td>${{ row.product.price }}</td>
+		<td>{{ row.sales_this_month }}</td>
+		<td>
+			<span class="badge {% if row.goal_pct is None %}bg-secondary{% elif row.goal_pct >= 90 %}bg-success{% elif row.goal_pct >= 70 %}bg-warning{% else %}bg-danger{% endif %}" title="{{ row.sales_this_month }}/{{ row.product.goal }}">
+				{% if row.goal_pct is not None %}{{ row.goal_pct }}%{% else %}—{% endif %}
+			</span>
+		</td>
+	</tr>
+	{% empty %}
+	<tr><td colspan="4" class="text-muted">No products. Add some on the Sales page.</td></tr>
+	{% endfor %}
+	</tbody>
+</table>
+	</div>
+
+	<div class="col-md-6">
+		<div class="p-3 bg-white border rounded">
+			<h2 class="h5 mb-3">Revenue progress</h2>
+			<div class="goal-pie" style="--p: {{ revenue_goal_pct|default:0 }};">
+				<div class="goal-pie-center">
+					<div class="h4 mb-0">{{ revenue_goal_pct|floatformat:0 }}%</div>
+					<div class="small text-muted">of goal</div>
+				</div>
+			</div>
+			<div class="small text-muted mt-2">
+				${{ revenue_achieved }} / ${{ revenue_goal }}
+			</div>
+			<div class="mt-2">
+				<span class="badge bg-success">Achieved</span>
+				<span class="badge bg-danger">Remaining</span>
+			</div>
+		</div>
+	</div>
+</div>
+
+{% endblock content %}

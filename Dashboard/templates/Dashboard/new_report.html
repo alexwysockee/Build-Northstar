@@ -1,0 +1,20 @@
+{% extends "Dashboard/base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-2">
+	<ol class="breadcrumb">
+		<li class="breadcrumb-item"><a href="{% url 'Dashboard:Reports' %}">Reports</a></li>
+		<li class="breadcrumb-item active" aria-current="page">Add report</li>
+	</ol>
+</nav>
+<h1 class="mb-3">Add a new report</h1>
+<form action="{% url 'Dashboard:new_report' %}" method="post">
+	{% csrf_token %}
+	<div class="mb-3">
+		<label for="id_text" class="form-label">{{ form.text.label }}</label>
+		{{ form.text }}
+		{% if form.text.errors %}<div class="text-danger small">{{ form.text.errors }}</div>{% endif %}
+	</div>
+	<button type="submit" class="btn btn-primary">Add report</button>
+	<a href="{% url 'Dashboard:Reports' %}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+{% endblock content %}

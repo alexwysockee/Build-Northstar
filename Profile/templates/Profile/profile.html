@@ -1,0 +1,48 @@
+{% extends "Dashboard/base.html" %}
+{% load static %}
+{% block content %}
+<h1 class="mb-3">Profile</h1>
+
+<div class="row g-3">
+	<div class="col-md-4">
+		<div class="p-3 bg-white border rounded">
+			<div class="d-flex align-items-center gap-3">
+				{% if profile.avatar %}
+					<img src="{{ profile.avatar.url }}" alt="Profile picture" class="avatar-circle avatar-lg">
+				{% else %}
+					<img src="{% static 'images/default-avatar.png' %}" alt="Profile picture" class="avatar-circle avatar-lg">
+				{% endif %}
+				<div>
+					<div class="fw-semibold">{{ user.username }}</div>
+					<div class="text-muted small">{{ user.email|default:"—" }}</div>
+				</div>
+			</div>
+			<hr>
+			<div class="small text-muted">
+				<div><strong>Groups:</strong>
+					{% for g in user.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+				</div>
+				<div class="mt-1"><strong>Last login:</strong> {% if user.last_login %}{{ user.last_login|date:"Y-m-d H:i" }}{% else %}Never{% endif %}</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="col-md-8">
+		<div class="p-3 bg-white border rounded">
+			<h2 class="h5 mb-3">Profile picture</h2>
+			<form method="post" enctype="multipart/form-data">
+				{% csrf_token %}
+				<div class="mb-3">
+					<label for="id_avatar" class="form-label">Upload new picture</label>
+					{{ form.avatar }}
+					{% if form.avatar.errors %}<div class="text-danger small">{{ form.avatar.errors }}</div>{% endif %}
+					{% if form.non_field_errors %}<div class="text-danger small">{{ form.non_field_errors }}</div>{% endif %}
+					<div class="form-text">PNG/JPG/WebP/GIF up to 5MB. Displayed as a circle.</div>
+				</div>
+				<button type="submit" class="btn btn-primary">Save picture</button>
+			</form>
+		</div>
+	</div>
+</div>
+{% endblock content %}
+

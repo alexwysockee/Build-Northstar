@@ -1,14 +1,26 @@
 {% extends "Dashboard/base.html" %}
 {% block content %}
-<p>Reports:</p>
-<ul>
-  {% for report in Reports %}
-    <li>
-        <a href="{% url 'Dashboard:report' report.id %}">{{ report }}</a>
-    </li>
-  {% empty %}
-    <li>No Reports have been added yet.</li>
-  {% endfor %}
-</ul>
+<h1 class="mb-3">Reports</h1>
+<table class="table">
+	<caption>Report List</caption>
+	<thead>
+		<tr>
+			<th scope="col">Report</th>
+			<th scope="col">Date added</th>
+			<th scope="col"></th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for report in Reports %}
+		<tr>
+			<td scope="row"><a href="{% url 'Dashboard:report' report.id %}">{{ report.text }}</a></td>
+			<td>{{ report.date_added|date:"Y-m-d H:i" }}</td>
+			<td><a href="{% url 'Dashboard:report' report.id %}" class="btn btn-sm btn-outline-primary">View</a></td>
+		</tr>
+		{% empty %}
+		<tr><td colspan="3" class="text-muted">No reports yet.</td></tr>
+		{% endfor %}
+	</tbody>
+</table>
+<p><a href="{% url 'Dashboard:new_report' %}" class="btn btn-primary">Add a new report</a></p>
 {% endblock content %}
-#test

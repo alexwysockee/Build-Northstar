@@ -1,0 +1,24 @@
+{% extends "Dashboard/base.html" %}
+{% block content %}
+<h1 class="mb-3">Edit daily sale</h1>
+<form method="post" action="">
+	{% csrf_token %}
+	<div class="row g-2 align-items-end mb-2">
+		<div class="col-auto">
+			<label for="id_product" class="form-label">Product</label>
+			{{ form.product }}
+		</div>
+		<div class="col-auto">
+			<label for="id_date" class="form-label">Date</label>
+			{{ form.date }}
+		</div>
+		<div class="col-auto">
+			<label for="id_amount" class="form-label">Amount</label>
+			{{ form.amount }}
+		</div>
+	</div>
+	{% if form.errors %}<div class="text-danger small mb-2">{{ form.errors }}</div>{% endif %}
+	<button type="submit" class="btn btn-primary">Save</button>
+	<a href="{% url 'Dashboard:sales' %}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+{% endblock content %}

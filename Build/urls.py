@@ -18,12 +18,17 @@ from django.contrib import admin
 from django.shortcuts import redirect
 from django.urls import path, include
 
+from django.conf import settings
+from django.conf.urls.static import static
+
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('', include('Profile.urls')),
-    # Redirect old /Reports/ and /reports/ to dashboard (login required)
-    path('Reports/', lambda r: redirect('/dashboard/reports/', permanent=False)),
-    path('reports/', lambda r: redirect('/dashboard/reports/', permanent=False)),
-    path('dashboard/', include('Dashboard.urls')),
+    path("admin/", admin.site.urls),
+    path("", include("Profile.urls")),
+    path("home/", include("Dashboard.urls")),
+    path("Reports/", lambda r: redirect("/home/reports/", permanent=False)),
+    path("reports/", lambda r: redirect("/home/reports/", permanent=False)),
 ]
 #test
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

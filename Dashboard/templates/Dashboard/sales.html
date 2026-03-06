@@ -1,0 +1,173 @@
+{% extends "Dashboard/base.html" %}
+{% block content %}
+
+<h1 class="mb-3">Sales</h1>
+
+<table class="table" id="snapshot-table">
+	<caption>C3 Product Performance Snapshot (Sales This Month)</caption>
+	<thead>
+	<tr>
+		<th scope="col">Product</th>
+		<th scope="col">Price</th>
+		<th scope="col">Sales this month</th>
+		<th scope="col">Goal</th>
+		<th scope="col">Goal %</th>
+		<th scope="col"></th>
+	</tr>
+	</thead>
+	<tbody>
+	{% for p in sales_products %}
+	<tr data-sales-this-month="{{ p.sales_this_month }}">
+		<td scope="row">{{ p.name }}</td>
+		<td>
+			<input type="number" name="price" class="form-control form-control-sm editable-num" data-field="price" value="{{ p.price }}" min="0" step="0.01" style="width:5rem;" form="update-form-{{ p.pk }}">
+		</td>
+		<td>{{ p.sales_this_month }}</td>
+		<td>
+			<input type="number" name="goal" class="form-control form-control-sm editable-num" data-field="goal" value="{{ p.goal }}" min="1" style="width:4rem;" form="update-form-{{ p.pk }}">
+		</td>
+		<td>
+			<span class="badge goal-badge" title="{{ p.sales_this_month }}/{{ p.goal }}">
+				{% if p.goal_pct is not None %}{{ p.goal_pct }}%{% else %}—{% endif %}
+			</span>
+		</td>
+		<td class="text-nowrap">
+			<form id="update-form-{{ p.pk }}" method="post" action="{% url 'Dashboard:sales_update_product' p.pk %}" class="d-inline">
+				{% csrf_token %}
+				<button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+			</form>
+			<form method="post" action="{% url 'Dashboard:sales_delete_product' p.pk %}" class="d-inline" onsubmit="return confirm('Remove this product from the table?');">
+				{% csrf_token %}
+				<button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+			</form>
+		</td>
+	</tr>
+	{% empty %}
+	<tr>
+		<td colspan="6" class="text-muted">No products. Add one below.</td>
+	</tr>
+	{% endfor %}
+	</tbody>
+</table>
+
+<div class="mt-4">
+	<h2 class="h5 mb-2">Daily sales this month</h2>
+	<p class="text-muted small">Daily entries count toward each product’s total for this month and the goal %.</p>
+	{% if daily_sales_this_month %}
+	<table class="table table-sm">
+		<thead>
+			<tr>
+				<th scope="col">Product</th>
+				<th scope="col">Date</th>
+				<th scope="col">Amount</th>
+				{% if can_modify_daily_sales %}<th scope="col"></th>{% endif %}
+			</tr>
+		</thead>
+		<tbody>
+			{% for d in daily_sales_this_month %}
+			<tr>
+				<td>{{ d.product.name }}</td>
+				<td>{{ d.date|date:"Y-m-d" }}</td>
+				<td>{{ d.amount }}</td>
+				{% if can_modify_daily_sales %}
+				<td class="text-nowrap">
+					<a href="{% url 'Dashboard:sales_edit_daily' d.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+					<form method="post" action="{% url 'Dashboard:sales_delete_daily' d.pk %}" class="d-inline" onsubmit="return confirm('Delete this daily sale?');">
+						{% csrf_token %}
+						<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+					</form>
+				</td>
+				{% endif %}
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+	{% else %}
+	<p class="text-muted">No daily sales recorded this month.</p>
+	{% endif %}
+	{% if can_modify_daily_sales %}
+	<h3 class="h6 mt-3 mb-2">Add daily sale</h3>
+	<form method="post" action="{% url 'Dashboard:sales_add_daily' %}" class="row g-2 align-items-end">
+		{% csrf_token %}
+		<div class="col-auto">
+			<label for="id_product" class="form-label">Product</label>
+			{{ add_daily_form.product }}
+		</div>
+		<div class="col-auto">
+			<label for="id_date" class="form-label">Date</label>
+			{{ add_daily_form.date }}
+		</div>
+		<div class="col-auto">
+			<label for="id_amount" class="form-label">Amount</label>
+			{{ add_daily_form.amount }}
+		</div>
+		<div class="col-auto">
+			<button type="submit" class="btn btn-primary">Add daily sale</button>
+		</div>
+	</form>
+	{% if add_daily_form.errors %}
+	<div class="text-danger small mt-1">{{ add_daily_form.errors }}</div>
+	{% endif %}
+	{% else %}
+	<p class="text-muted small">Only admin, Sales Rep, and Dealership User can add or modify daily sales.</p>
+	{% endif %}
+</div>
+
+<div class="mt-4">
+	<h2 class="h5 mb-2">Add product</h2>
+	<form method="post" action="{% url 'Dashboard:sales_add_product' %}" class="row g-2 align-items-end">
+		{% csrf_token %}
+		<div class="col-auto">
+			<label for="id_name" class="form-label visually-hidden">Product name</label>
+			{{ add_form.name }}
+		</div>
+		<div class="col-auto">
+			<label for="id_price" class="form-label">Price</label>
+			{{ add_form.price }}
+		</div>
+		<div class="col-auto">
+			<label for="id_goal" class="form-label">Monthly goal</label>
+			{{ add_form.goal }}
+		</div>
+		<div class="col-auto">
+			<button type="submit" class="btn btn-primary">Add product</button>
+		</div>
+	</form>
+	{% if add_form.errors %}
+	<div class="text-danger small mt-1">{{ add_form.errors }}</div>
+	{% endif %}
+</div>
+
+<script>
+(function() {
+	function updateGoalBadge(row) {
+		var sales = parseInt(row.getAttribute('data-sales-this-month'), 10) || 0;
+		var goalInput = row.querySelector('input[data-field="goal"]');
+		var badge = row.querySelector('.goal-badge');
+		if (!goalInput || !badge) return;
+		var goal = parseInt(goalInput.value, 10) || 0;
+		if (goal <= 0) {
+			badge.textContent = '—';
+			badge.title = sales + '/0';
+			badge.className = 'badge goal-badge bg-secondary';
+			return;
+		}
+		var pct = Math.round((sales / goal) * 100);
+		badge.textContent = pct + '%';
+		badge.title = sales + '/' + goal;
+		badge.className = 'badge goal-badge ';
+		if (pct >= 90) badge.classList.add('bg-success');
+		else if (pct >= 70) badge.classList.add('bg-warning');
+		else badge.classList.add('bg-danger');
+	}
+	document.querySelectorAll('#snapshot-table tbody tr').forEach(function(row) {
+		if (row.querySelector('.editable-num')) {
+			updateGoalBadge(row);
+			row.querySelector('input[data-field="goal"]').addEventListener('input', function() { updateGoalBadge(row); });
+			row.querySelector('input[data-field="goal"]').addEventListener('change', function() { updateGoalBadge(row); });
+		}
+	});
+})();
+</script>
+
+{% endblock content %}
