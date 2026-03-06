@@ -26,3 +26,4 @@ urlpatterns = [
     path('reports/', lambda r: redirect('/dashboard/reports/', permanent=False)),
     path('dashboard/', include('Dashboard.urls')),
 ]
+#test
