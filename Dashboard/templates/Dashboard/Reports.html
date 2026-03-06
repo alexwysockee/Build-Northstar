@@ -1,0 +1,13 @@
+{% extends "Dashboard/base.html" %}
+{% block content %}
+<p>Reports:</p>
+<ul>
+  {% for report in Reports %}
+    <li>
+        <a href="{% url 'Dashboard:report' report.id %}">{{ report }}</a>
+    </li>
+  {% empty %}
+    <li>No Reports have been added yet.</li>
+  {% endfor %}
+</ul>
+{% endblock content %}

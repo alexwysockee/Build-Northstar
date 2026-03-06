@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 320px; margin: 3rem auto; padding: 0 1rem; }
+        h1 { margin-bottom: 1.5rem; font-size: 1.5rem; }
+        .field { margin-bottom: 1rem; }
+        .field label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+        .field input { width: 100%; padding: 0.5rem; box-sizing: border-box; font-size: 1rem; }
+        .error { color: #c00; margin-bottom: 1rem; }
+        button[type="submit"] { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Sign in</h1>
+    {% if form.errors %}
+    <p class="error">Username and password didn't match. Please try again.</p>
+    {% endif %}
+    <form method="post" action="{% url 'Profile:login' %}">
+        {% csrf_token %}
+        <div class="field">
+            <label for="id_username">Username</label>
+            <input type="text" name="username" id="id_username" required autofocus placeholder="Enter username" maxlength="150">
+        </div>
+        <div class="field">
+            <label for="id_password">Password</label>
+            <input type="password" name="password" id="id_password" required placeholder="Enter password">
+        </div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit">Log in</button>
+    </form>
+</body>
+</html>

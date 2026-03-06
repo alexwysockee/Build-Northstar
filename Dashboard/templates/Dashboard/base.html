@@ -1,0 +1,14 @@
+<p>
+  <a href="{% url 'Dashboard:index' %}">Dashboard</a> -
+  <a href="{% url 'Dashboard:Reports' %}">Reports</a>
+  {% if can_see_users %}
+    - <a href="{% url 'Profile:user_list' %}">Users</a>
+  {% endif %}
+  {% if user.is_authenticated %}
+    - <form method="post" action="{% url 'Profile:logout' %}" style="display:inline;">{% csrf_token %}<button type="submit" style="background:none;border:none;color:inherit;font:inherit;cursor:pointer;text-decoration:underline;padding:0;">Log out</button></form>
+  {% else %}
+    - <a href="{% url 'Profile:login' %}">Log in</a>
+  {% endif %}
+</p>
+{% block content %} to be overridden
+{% endblock content %}
