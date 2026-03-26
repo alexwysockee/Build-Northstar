@@ -1,86 +1,164 @@
-/* Blue & White Theme */
+/* Northstar "bubbly" blue/white theme (Bootstrap-friendly) */
 
 :root {
   --theme-primary: #0d6efd;
   --theme-primary-dark: #0a58ca;
-  --theme-light: #e7f1ff;
-  --theme-white: #ffffff;
+  --theme-primary-soft: rgba(13, 110, 253, 0.12);
+  --theme-ink: #0b1220;
+  --theme-muted: #5b6678;
+  --theme-surface: rgba(255, 255, 255, 0.9);
+  --theme-surface-strong: #ffffff;
+  --theme-border: rgba(13, 110, 253, 0.18);
+  --theme-shadow: 0 16px 40px rgba(11, 18, 32, 0.12);
+  --theme-shadow-sm: 0 10px 24px rgba(11, 18, 32, 0.1);
+  --theme-radius-lg: 18px;
+  --theme-radius-md: 14px;
+  --theme-radius-sm: 12px;
 }
 
 body {
-  background-color: var(--theme-white);
-  background-image: url("/static/images/background.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  color: var(--theme-ink);
+  background:
+    radial-gradient(1200px 600px at 20% 10%, rgba(13, 110, 253, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 90% 20%, rgba(13, 110, 253, 0.12), transparent 55%),
+    linear-gradient(180deg, rgba(231, 241, 255, 0.95), rgba(255, 255, 255, 0.92));
   background-attachment: fixed;
-  color: #212529;
 }
 
-/* Navbar - blue with white text (navbar-dark bg-primary) */
-.navbar.bg-primary {
-  border-bottom: 2px solid var(--theme-primary-dark);
+@supports (background: url("/static/images/background.png")) {
+  body {
+    background-image:
+      radial-gradient(1200px 600px at 20% 10%, rgba(13, 110, 253, 0.18), transparent 60%),
+      radial-gradient(900px 500px at 90% 20%, rgba(13, 110, 253, 0.12), transparent 55%),
+      linear-gradient(180deg, rgba(231, 241, 255, 0.95), rgba(255, 255, 255, 0.92)),
+      url("/static/images/background.png");
+    background-size: auto, auto, auto, cover;
+    background-position: 0 0, 0 0, 0 0, center;
+    background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
+  }
 }
 
-.navbar .btn-link {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-.navbar .btn-link:hover {
-  color: var(--theme-white) !important;
-}
-
-/* Main content area - subtle light blue background */
+/* Layout */
 main {
-  background-color: rgba(231, 241, 255, 0.88);
-  min-height: calc(100vh - 56px);
+  background: transparent;
 }
 
-/* Tables - blue accents */
+/* App surfaces */
+.ns-surface {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-lg);
+  box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(10px);
+}
+
+.ns-card {
+  background: var(--theme-surface-strong);
+  border: 1px solid rgba(11, 18, 32, 0.08);
+  border-radius: var(--theme-radius-lg);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.ns-soft {
+  background: var(--theme-primary-soft);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-md);
+}
+
+/* Navbar */
+.navbar.bg-primary {
+  background: linear-gradient(90deg, var(--theme-primary-dark), var(--theme-primary)) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 24px rgba(11, 18, 32, 0.12);
+}
+
+.navbar .nav-link {
+  border-radius: 999px;
+  padding: 0.5rem 0.85rem;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.navbar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+
+.navbar .nav-link.active,
+.navbar .nav-link[aria-current="page"] {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Typography polish */
+h1, h2, h3, h4, h5 {
+  letter-spacing: -0.01em;
+}
+
+.text-muted {
+  color: var(--theme-muted) !important;
+}
+
+/* Tables */
 .table {
-  background-color: var(--theme-white);
-  border: 1px solid #dee2e6;
+  background-color: transparent;
 }
 
 .table thead th {
-  background-color: var(--theme-primary);
-  color: var(--theme-white);
-  border-color: var(--theme-primary-dark);
+  background-color: rgba(13, 110, 253, 0.1);
+  color: var(--theme-primary-dark);
+  border-color: rgba(13, 110, 253, 0.18);
+  font-weight: 700;
 }
 
-.table tbody tr:nth-of-type(even) {
-  background-color: rgba(13, 110, 253, 0.05);
+.table tbody tr {
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .table tbody tr:hover {
-  background-color: rgba(13, 110, 253, 0.1);
+  background-color: rgba(13, 110, 253, 0.08);
 }
 
-/* Primary buttons */
+.table > :not(caption) > * > * {
+  padding: 0.7rem 0.75rem;
+}
+
+/* Buttons */
+.btn {
+  border-radius: 999px;
+}
+
 .btn-primary {
-  background-color: var(--theme-primary);
-  border-color: var(--theme-primary);
+  background: linear-gradient(180deg, var(--theme-primary), var(--theme-primary-dark));
+  border-color: transparent;
+  box-shadow: 0 10px 20px rgba(13, 110, 253, 0.22);
 }
 
 .btn-primary:hover {
-  background-color: var(--theme-primary-dark);
-  border-color: var(--theme-primary-dark);
+  filter: brightness(1.02);
+  box-shadow: 0 12px 24px rgba(13, 110, 253, 0.26);
 }
 
-/* Links */
-a {
-  color: var(--theme-primary);
+.btn-primary:active {
+  transform: translateY(1px);
 }
 
-a:hover {
-  color: var(--theme-primary-dark);
+/* Badges */
+.badge {
+  border-radius: 999px;
+  padding: 0.45em 0.7em;
 }
 
-/* Form controls - subtle blue focus */
+/* Inputs */
+.form-control,
+.form-select,
+textarea.form-control {
+  border-radius: var(--theme-radius-sm);
+  border-color: rgba(11, 18, 32, 0.12);
+}
+
 .form-control:focus,
 .form-select:focus {
-  border-color: var(--theme-primary);
-  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  border-color: rgba(13, 110, 253, 0.55);
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.18);
 }
 
 /* Last login indicators on Users page */

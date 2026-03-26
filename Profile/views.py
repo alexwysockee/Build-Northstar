@@ -44,7 +44,23 @@ def user_list(request):
     users = User.objects.all().order_by("username").prefetch_related("groups")
     profiles = UserProfile.objects.filter(user__in=users).select_related("user")
     avatar_by_user_id = {p.user_id: (p.avatar.url if p.avatar else None) for p in profiles}
-    users_with_login = [(u, _last_login_css_class(u), avatar_by_user_id.get(u.id)) for u in users]
+
+    profile_by_user_id = {p.user_id: p for p in profiles}
+
+    def _dealership_badge_variant(dealership_id):
+        # Keep this simple/stable: a single brand-consistent variant when assigned.
+        return "primary" if dealership_id else "secondary"
+
+    users_with_login = [
+        (
+            u,
+            _last_login_css_class(u),
+            avatar_by_user_id.get(u.id),
+            getattr(profile_by_user_id.get(u.id), "dealership_id", None),
+            _dealership_badge_variant(getattr(profile_by_user_id.get(u.id), "dealership_id", None)),
+        )
+        for u in users
+    ]
     context = {
         "users_with_login": users_with_login,
         "can_see_users": True,

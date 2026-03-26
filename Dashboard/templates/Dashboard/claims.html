@@ -8,8 +8,8 @@
 	<span class="badge bg-warning text-dark">WIP</span>
 </div>
 
-<div class="p-3 bg-white border rounded mb-4">
-	<h2 class="h5 mb-2">Test stub</h2>
+<div class="ns-soft p-3 mb-4">
+	<h2 class="h5 mb-2">Heads up</h2>
 	<p class="text-muted small mb-0">
 		This page is WIP. It currently shows dummy rows and echoes your submission back
 		(without saving to the DB).
@@ -18,11 +18,12 @@
 
 <div class="row">
 	<div class="col-lg-7 mb-4">
-		<div class="p-3 bg-white border rounded h-100">
+		<div class="ns-card p-3 p-md-4 h-100">
 			<h2 class="h5 mb-3">Sample claims (dummy data)</h2>
 			{% if sample_claims %}
+			<div class="table-responsive">
 			<table class="table table-sm align-middle mb-0">
-				<thead class="table-light">
+				<thead>
 					<tr>
 						<th scope="col">Claim #</th>
 						<th scope="col">Status</th>
@@ -55,6 +56,7 @@
 					{% endfor %}
 				</tbody>
 			</table>
+			</div>
 			{% else %}
 				<p class="text-muted small mb-0">No dummy claims.</p>
 			{% endif %}
@@ -62,7 +64,7 @@
 	</div>
 
 	<div class="col-lg-5">
-		<div class="p-3 bg-white border rounded h-100">
+		<div class="ns-card p-3 p-md-4 h-100">
 			<h2 class="h5 mb-3">Submit a claim (WIP stub)</h2>
 			<form method="post" action="">
 				{% csrf_token %}
@@ -107,7 +109,7 @@
 					<textarea class="form-control" name="reason" id="id_reason" rows="3" placeholder="Optional notes (stub)" maxlength="2000"></textarea>
 				</div>
 
-				<button type="submit" class="btn btn-primary w-100">Submit claim (WIP)</button>
+				<button type="submit" class="btn btn-primary w-100">Submit claim</button>
 			</form>
 
 			{% if submitted_stub_data %}
