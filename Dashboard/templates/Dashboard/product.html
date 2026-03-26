@@ -1,4 +1,6 @@
 {% extends "Dashboard/base.html" %}
+{# Product detail page for product_id 1–4 (Rust Protection, Extended Warranty, Paint Protection, Fabric Guard). #}
+{% block title %}{{ product_name }} | {{ block.super }}{% endblock title %}
 {% block content %}
 <h1 class="mb-3">{{ product_name }}</h1>
 <p>Product {{ product_id }} detail page.</p>

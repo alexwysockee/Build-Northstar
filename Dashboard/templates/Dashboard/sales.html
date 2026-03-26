@@ -1,4 +1,6 @@
 {% extends "Dashboard/base.html" %}
+{# Sales: C3 Product Performance table (editable price/goal, add/remove product), daily sales list and add form; uses can_modify_daily_sales. Inline JS updates goal badge. #}
+{% block title %}Sales | {{ block.super }}{% endblock title %}
 {% block content %}
 
 <h1 class="mb-3">Sales</h1>
@@ -52,12 +54,13 @@
 
 <div class="mt-4">
 	<h2 class="h5 mb-2">Daily sales this month</h2>
-	<p class="text-muted small">Daily entries count toward each product’s total for this month and the goal %.</p>
+	<p class="text-muted small">Daily entries count toward each product’s total for this month and the goal %. Physical products reduce on-hand inventory for the selected dealership.</p>
 	{% if daily_sales_this_month %}
 	<table class="table table-sm">
 		<thead>
 			<tr>
 				<th scope="col">Product</th>
+				<th scope="col">Dealership</th>
 				<th scope="col">Date</th>
 				<th scope="col">Amount</th>
 				{% if can_modify_daily_sales %}<th scope="col"></th>{% endif %}
@@ -67,6 +70,7 @@
 			{% for d in daily_sales_this_month %}
 			<tr>
 				<td>{{ d.product.name }}</td>
+				<td>{{ d.dealership.name }}</td>
 				<td>{{ d.date|date:"Y-m-d" }}</td>
 				<td>{{ d.amount }}</td>
 				{% if can_modify_daily_sales %}
@@ -92,6 +96,10 @@
 		<div class="col-auto">
 			<label for="id_product" class="form-label">Product</label>
 			{{ add_daily_form.product }}
+		</div>
+		<div class="col-auto">
+			<label for="id_dealership" class="form-label">Dealership</label>
+			{{ add_daily_form.dealership }}
 		</div>
 		<div class="col-auto">
 			<label for="id_date" class="form-label">Date</label>
@@ -129,6 +137,12 @@
 			<label for="id_goal" class="form-label">Monthly goal</label>
 			{{ add_form.goal }}
 		</div>
+	<div class="col-auto">
+		<div class="form-check" style="padding-top: 1.5rem;">
+			{{ add_form.tracks_inventory }}
+			<label class="form-check-label" for="id_tracks_inventory">Physical inventory item</label>
+		</div>
+	</div>
 		<div class="col-auto">
 			<button type="submit" class="btn btn-primary">Add product</button>
 		</div>

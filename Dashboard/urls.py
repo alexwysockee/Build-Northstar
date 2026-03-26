@@ -8,6 +8,9 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("dashboard/", views.index, name="index"),
     path("product/<int:product_id>/", views.product, name="product"),
+    path("inventory/", views.inventory, name="inventory"),
+    path("inventory/order/", views.inventory_order_submit, name="inventory_order_submit"),
+    path("inventory/order/<int:order_pk>/deliver/", views.inventory_order_deliver, name="inventory_order_deliver"),
     path("sales/", views.sales, name="sales"),
     path("sales/add/", views.sales_add_product, name="sales_add_product"),
     path("sales/add-daily/", views.sales_add_daily, name="sales_add_daily"),
@@ -24,4 +27,6 @@ urlpatterns = [
     path("entry/<int:entry_id>/delete/", views.delete_entry, name="delete_entry"),
     path("entry/document/<int:doc_id>/delete/", views.delete_entry_document, name="delete_entry_document"),
     path("entry/document/<int:doc_id>/", views.entry_document_inline, name="entry_document_inline"),
+    path("claims/", views.claims, name="claims"),
+    path("inspections/", views.inspections, name="inspections"),
 ]

@@ -1,6 +1,9 @@
 {% extends "Dashboard/base.html" %}
+{# Edit user groups and home dealership (inventory / sales scope). #}
+{% block title %}Edit groups & dealership | {{ block.super }}{% endblock title %}
 {% block content %}
-<h1 class="mb-3">Edit groups for {{ edit_user.username }}</h1>
+<h1 class="mb-3">Edit groups &amp; dealership for {{ edit_user.username }}</h1>
+<p class="text-muted small">Dealership ties Sales Reps and Dealership Users to one location for inventory and daily sales.</p>
 <form method="post" action="">
 	{% csrf_token %}
 	<div class="mb-3">
@@ -10,6 +13,13 @@
 		</div>
 		{% if form.groups.errors %}<div class="text-danger small">{{ form.groups.errors }}</div>{% endif %}
 	</div>
+	<div class="mb-3">
+		<label class="form-label" for="id_dealership">{{ form.dealership.label }}</label>
+		{{ form.dealership }}
+		{% if form.dealership.help_text %}<div class="form-text">{{ form.dealership.help_text }}</div>{% endif %}
+		{% if form.dealership.errors %}<div class="text-danger small">{{ form.dealership.errors }}</div>{% endif %}
+	</div>
+	{% if form.non_field_errors %}<div class="text-danger small mb-2">{{ form.non_field_errors }}</div>{% endif %}
 	<button type="submit" class="btn btn-primary">Save</button>
 	<a href="{% url 'Profile:user_list' %}" class="btn btn-outline-secondary">Cancel</a>
 </form>

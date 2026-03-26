@@ -1,4 +1,6 @@
 {% extends "Dashboard/base.html" %}
+{# Home: Landing page after login; welcome message and link to Dashboard. #}
+{% block title %}Home | {{ block.super }}{% endblock title %}
 {% block content %}
 <h1 class="mb-3">Welcome{% if user.is_authenticated %}, {{ user.username }}{% endif %}.</h1>
 <p>To the C3 Digital Transformation System.</p>

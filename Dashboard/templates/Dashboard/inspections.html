@@ -1,0 +1,128 @@
+{% extends "Dashboard/base.html" %}
+
+{% block title %}Inspections | {{ block.super }}{% endblock title %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+	<h1 class="mb-0">Inspections</h1>
+	<span class="badge bg-warning text-dark">WIP</span>
+</div>
+
+<div class="p-3 bg-white border rounded mb-4">
+	<h2 class="h5 mb-2">Test stub</h2>
+	<p class="text-muted small mb-0">
+		This page is WIP. It provides dummy appointment queue data and echoes bookings
+		(without saving to the DB).
+	</p>
+</div>
+
+<div class="row">
+	<div class="col-lg-7 mb-4">
+		<div class="p-3 bg-white border rounded h-100">
+			<h2 class="h5 mb-3">Appointment queue (dummy data)</h2>
+			{% if sample_appointments %}
+			<table class="table table-sm align-middle mb-0">
+				<thead class="table-light">
+					<tr>
+						<th scope="col">Request</th>
+						<th scope="col">Dealership</th>
+						<th scope="col">Product</th>
+						<th scope="col">Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for a in sample_appointments %}
+					<tr>
+						<td class="font-monospace">{{ a.request_number }}</td>
+						<td>{{ a.dealership.name }}</td>
+						<td>{{ a.product.name }}</td>
+						<td>
+							{% if a.status == "completed" %}
+								<span class="badge bg-success">Completed</span>
+							{% elif a.status == "in_progress" %}
+								<span class="badge bg-info text-dark">In progress</span>
+							{% else %}
+								<span class="badge bg-warning text-dark">Scheduled</span>
+							{% endif %}
+						</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+			{% else %}
+				<p class="text-muted small mb-0">No dummy appointments.</p>
+			{% endif %}
+		</div>
+	</div>
+
+	<div class="col-lg-5">
+		<div class="p-3 bg-white border rounded h-100">
+			<h2 class="h5 mb-3">Book an inspection (WIP stub)</h2>
+			<form method="post" action="">
+				{% csrf_token %}
+
+				<div class="mb-3">
+					<label class="form-label" for="id_request_number">Request number</label>
+					<input class="form-control" type="text" id="id_request_number" name="request_number" maxlength="50" placeholder="e.g. REQ-1001" />
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label" for="id_inspection_type">Inspection type</label>
+					<select class="form-select" id="id_inspection_type" name="inspection_type">
+						<option value="">-- pick --</option>
+						{% for val, label in inspection_type_choices %}
+							<option value="{{ val }}">{{ label }}</option>
+						{% endfor %}
+					</select>
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label" for="id_dealership_id">Dealership</label>
+					<select class="form-select" id="id_dealership_id" name="dealership_id">
+						<option value="">-- pick --</option>
+						{% for d in dealerships %}
+							<option value="{{ d.pk }}">{{ d.name }}</option>
+						{% endfor %}
+					</select>
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label" for="id_product_id">Product</label>
+					<select class="form-select" id="id_product_id" name="product_id">
+						<option value="">-- pick --</option>
+						{% for p in products %}
+							<option value="{{ p.pk }}">{{ p.name }}</option>
+						{% endfor %}
+					</select>
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label" for="id_appointment_time">Appointment time</label>
+					<input class="form-control" type="text" id="id_appointment_time" name="appointment_time" placeholder="e.g. 2026-03-26 14:30" />
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label" for="id_inspector_name">Inspector name</label>
+					<input class="form-control" type="text" id="id_inspector_name" name="inspector_name" maxlength="200" placeholder="e.g. Alex Inspector" />
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label" for="id_notes">Notes</label>
+					<textarea class="form-control" id="id_notes" name="notes" rows="3" placeholder="Optional stub notes"></textarea>
+				</div>
+
+				<button type="submit" class="btn btn-primary w-100">Book inspection (WIP)</button>
+			</form>
+
+			{% if submitted_stub_data %}
+				<div class="mt-3">
+					<h3 class="h6 mb-2">Submission echo</h3>
+					<pre class="bg-light border rounded p-2 mb-0" style="white-space: pre-wrap;">{{ submitted_stub_data }}</pre>
+				</div>
+			{% endif %}
+		</div>
+	</div>
+</div>
+
+{% endblock content %}
+

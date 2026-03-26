@@ -1,0 +1,160 @@
+{% extends "Dashboard/base.html" %}
+
+{% block title %}Inventory | {{ block.super }}{% endblock title %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+	<h1 class="mb-0">Inventory</h1>
+	{% if can_submit_inventory_order or can_manage_inventory_orders %}
+		<span class="badge bg-warning text-dark">Physical stock</span>
+	{% endif %}
+</div>
+
+{% if not dealership_sections %}
+	<div class="p-3 bg-white border rounded mb-4">
+		<h2 class="h5 mb-2">No inventory scope available</h2>
+		<p class="text-muted small mb-0">
+			No dealerships are available for your account right now. If you’re a Sales Rep / Dealership User,
+			set your home dealership on the user page (or ask an admin to configure it).
+		</p>
+	</div>
+{% endif %}
+
+{% for section in dealership_sections %}
+<div class="card mb-4">
+	<div class="card-header fw-semibold">{{ section.dealership.name }}</div>
+	<div class="card-body p-0">
+		<div class="table-responsive">
+			<table class="table table-sm mb-0">
+				<thead class="table-light">
+					<tr>
+						<th scope="col">Product</th>
+						<th scope="col">On-hand</th>
+						<th scope="col">Status</th>
+					</tr>
+				</thead>
+				<tbody>
+				{% for row in section.rows %}
+					<tr
+						{% if row.badge_variant == 'danger' %}
+							class="table-danger"
+						{% elif row.badge_variant == 'warning' %}
+							class="table-warning"
+						{% else %}
+							class="table-success"
+						{% endif %}
+					>
+						<td>{{ row.product.name }}</td>
+						<td>{{ row.quantity }}</td>
+						<td>
+							{% if row.badge_variant == 'warning' or row.badge_variant == 'danger' %}
+								<span class="fw-semibold text-dark">{{ row.status_label }}</span>
+							{% else %}
+								<span class="fw-semibold">{{ row.status_label }}</span>
+							{% endif %}
+						</td>
+					</tr>
+				{% empty %}
+					<tr><td colspan="3" class="text-muted">No inventory rows.</td></tr>
+				{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+{% endfor %}
+
+{% if can_submit_inventory_order %}
+<div class="card mb-4">
+	<div class="card-header fw-semibold">Request additional inventory</div>
+	<div class="card-body">
+		<p class="text-muted small mb-3">
+			Submit a replenishment request. New orders start as <strong>Pending</strong>.
+			Managers mark them <strong>Delivered</strong> when stock arrives.
+		</p>
+		<form method="post" action="{% url 'Dashboard:inventory_order_submit' %}">
+			{% csrf_token %}
+			<div class="row g-3 align-items-end">
+				<div class="col-md-4">
+					<label class="form-label" for="id_product">Product</label>
+					{{ order_form.product }}
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="id_dealership">Dealership</label>
+					{{ order_form.dealership }}
+				</div>
+				<div class="col-md-2">
+					<label class="form-label" for="id_quantity_requested">Qty</label>
+					{{ order_form.quantity_requested }}
+				</div>
+				<div class="col-md-12">
+					<label class="form-label" for="id_notes">Notes (optional)</label>
+					{{ order_form.notes }}
+				</div>
+				<div class="col-md-12">
+					<button type="submit" class="btn btn-primary">Submit request</button>
+				</div>
+			</div>
+		</form>
+	</div>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+	<div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+		<span>Inventory order tracking</span>
+		{% if pending_order_count %}
+			<span class="badge bg-warning text-dark">{{ pending_order_count }} pending</span>
+		{% endif %}
+	</div>
+	<div class="card-body p-0">
+		<div class="table-responsive">
+			<table class="table table-sm mb-0">
+				<thead class="table-light">
+					<tr>
+						<th scope="col">Order #</th>
+						<th scope="col">Product</th>
+						<th scope="col">Dealership</th>
+						<th scope="col">Qty</th>
+						<th scope="col">Status</th>
+						<th scope="col">Requested</th>
+						{% if can_manage_inventory_orders %}<th scope="col"></th>{% endif %}
+					</tr>
+				</thead>
+				<tbody>
+				{% for o in inventory_orders %}
+					<tr class="{% if o.status == 'pending' %}table-warning{% else %}table-success{% endif %}">
+						<td>{{ o.display_order_id }}</td>
+						<td>{{ o.product.name }}</td>
+						<td>{{ o.dealership.name }}</td>
+						<td>{{ o.quantity_requested }}</td>
+						<td>
+							{% if o.status == 'pending' %}
+								<span class="fw-semibold text-dark">Pending</span>
+							{% else %}
+								<span class="fw-semibold">Delivered</span>
+							{% endif %}
+						</td>
+						<td class="text-nowrap">{{ o.date_requested|date:"Y-m-d H:i" }}</td>
+						{% if can_manage_inventory_orders %}
+							<td class="text-nowrap">
+								{% if o.status == 'pending' %}
+									<form method="post" action="{% url 'Dashboard:inventory_order_deliver' o.pk %}" class="d-inline" onsubmit="return confirm('Mark order {{ o.display_order_id }} delivered?');">
+										{% csrf_token %}
+										<button type="submit" class="btn btn-sm btn-outline-primary">Delivered</button>
+									</form>
+								{% endif %}
+							</td>
+						{% endif %}
+					</tr>
+				{% empty %}
+					<tr><td colspan="7" class="text-muted">No inventory orders yet.</td></tr>
+				{% endfor %}
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+{% endblock content %}
+

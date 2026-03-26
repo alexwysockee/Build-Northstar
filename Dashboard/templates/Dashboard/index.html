@@ -1,4 +1,6 @@
 {% extends "Dashboard/base.html" %}
+{# Main dashboard: C3 Product Performance table (product, price, sales this month, goal %) and revenue progress pie. #}
+{% block title %}Dashboard | {{ block.super }}{% endblock title %}
 {% block content %}
 
 <p>Dashboard</p>
@@ -37,12 +39,22 @@
 
 	<div class="col-md-6">
 		<div class="p-3 bg-white border rounded">
-			<h2 class="h5 mb-3">Revenue progress</h2>
-			<div class="goal-pie" style="--p: {{ revenue_goal_pct|default:0 }};">
-				<div class="goal-pie-center">
-					<div class="h4 mb-0">{{ revenue_goal_pct|floatformat:0 }}%</div>
-					<div class="small text-muted">of goal</div>
-				</div>
+			<h2 class="h5 mb-3">Revenue progress (company wide)</h2>
+			<div class="text-center mb-2">
+				{% if revenue_progress_png_b64 %}
+					<img
+						src="data:image/png;base64,{{ revenue_progress_png_b64 }}"
+						alt="Revenue progress chart"
+						style="width: 220px; height: 220px;"
+					/>
+				{% else %}
+					<div class="goal-pie" style="--p: {{ revenue_goal_pct|default:0 }};">
+						<div class="goal-pie-center">
+							<div class="h4 mb-0">{{ revenue_goal_pct_raw|default:revenue_goal_pct|floatformat:0 }}%</div>
+							<div class="small text-muted">of goal</div>
+						</div>
+					</div>
+				{% endif %}
 			</div>
 			<div class="small text-muted mt-2">
 				${{ revenue_achieved }} / ${{ revenue_goal }}
@@ -50,6 +62,25 @@
 			<div class="mt-2">
 				<span class="badge bg-success">Achieved</span>
 				<span class="badge bg-danger">Remaining</span>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="row mt-4">
+	<div class="col-md-12">
+		<div class="p-3 bg-white border rounded">
+			<h2 class="h5 mb-3">Inventory by product (per dealership)</h2>
+			<div class="text-center">
+				{% if inventory_totals_png_b64 %}
+					<img
+						src="data:image/png;base64,{{ inventory_totals_png_b64 }}"
+						alt="Inventory totals by dealership chart"
+						style="width: 100%; max-width: 1100px; height: auto;"
+					/>
+				{% else %}
+					<p class="text-muted small mb-0">No inventory data available yet.</p>
+				{% endif %}
 			</div>
 		</div>
 	</div>

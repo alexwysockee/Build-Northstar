@@ -1,4 +1,6 @@
 {% extends "Dashboard/base.html" %}
+{# Reports list: table of report title and date added; link to add new report and to each report detail. #}
+{% block title %}Reports | {{ block.super }}{% endblock title %}
 {% block content %}
 <h1 class="mb-3">Reports</h1>
 <table class="table">

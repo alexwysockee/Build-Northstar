@@ -1,5 +1,7 @@
 {% extends "Dashboard/base.html" %}
 {% load static %}
+{# Logged-in user profile: avatar display, username/email/groups/last login; form to upload new profile picture (image, max 5MB). #}
+{% block title %}Profile | {{ block.super }}{% endblock title %}
 {% block content %}
 <h1 class="mb-3">Profile</h1>
 
@@ -28,7 +30,7 @@
 	</div>
 
 	<div class="col-md-8">
-		<div class="p-3 bg-white border rounded">
+		<div class="p-3 bg-white border rounded mb-3">
 			<h2 class="h5 mb-3">Profile picture</h2>
 			<form method="post" enctype="multipart/form-data">
 				{% csrf_token %}
@@ -39,7 +41,33 @@
 					{% if form.non_field_errors %}<div class="text-danger small">{{ form.non_field_errors }}</div>{% endif %}
 					<div class="form-text">PNG/JPG/WebP/GIF up to 5MB. Displayed as a circle.</div>
 				</div>
-				<button type="submit" class="btn btn-primary">Save picture</button>
+				<button type="submit" name="save_avatar" value="1" class="btn btn-primary">Save picture</button>
+			</form>
+		</div>
+
+		<div class="p-3 bg-white border rounded">
+			<h2 class="h5 mb-3">Change password</h2>
+			<p class="form-text">You can only change your own password here. Enter your current password, then choose a new one.</p>
+			<form method="post" action="">
+				{% csrf_token %}
+				<div class="mb-3">
+					<label for="id_old_password" class="form-label">{{ password_form.old_password.label }}</label>
+					{{ password_form.old_password }}
+					{% if password_form.old_password.errors %}<div class="text-danger small">{{ password_form.old_password.errors }}</div>{% endif %}
+				</div>
+				<div class="mb-3">
+					<label for="id_new_password1" class="form-label">{{ password_form.new_password1.label }}</label>
+					{{ password_form.new_password1 }}
+					{% if password_form.new_password1.help_text %}<div class="form-text">{{ password_form.new_password1.help_text|safe }}</div>{% endif %}
+					{% if password_form.new_password1.errors %}<div class="text-danger small">{{ password_form.new_password1.errors }}</div>{% endif %}
+				</div>
+				<div class="mb-3">
+					<label for="id_new_password2" class="form-label">{{ password_form.new_password2.label }}</label>
+					{{ password_form.new_password2 }}
+					{% if password_form.new_password2.errors %}<div class="text-danger small">{{ password_form.new_password2.errors }}</div>{% endif %}
+				</div>
+				{% if password_form.non_field_errors %}<div class="text-danger small mb-2">{{ password_form.non_field_errors }}</div>{% endif %}
+				<button type="submit" name="save_password" value="1" class="btn btn-primary">Change password</button>
 			</form>
 		</div>
 	</div>

@@ -1,4 +1,6 @@
 {% extends "Dashboard/base.html" %}
+{# Single report: breadcrumb, title, Add new entry, Delete report (if can_delete_reports). Table of entries with text, embedded PDFs, Edit/Delete. #}
+{% block title %}{{ report.text }} | {{ block.super }}{% endblock title %}
 {% block content %}
 <nav aria-label="breadcrumb" class="mb-2">
 	<ol class="breadcrumb">

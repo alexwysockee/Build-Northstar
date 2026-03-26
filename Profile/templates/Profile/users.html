@@ -1,5 +1,7 @@
 {% extends "Dashboard/base.html" %}
 {% load static %}
+{# User list: avatar, email, dealership ID (color-coded), active, groups, last login, date joined; actions. #}
+{% block title %}Users | {{ block.super }}{% endblock title %}
 {% block content %}
 <h1 class="mb-3">Users</h1>
 {% if can_modify_user_groups %}
@@ -11,7 +13,7 @@
     <tr>
       <th scope="col">User</th>
       <th scope="col">Email</th>
-      <th scope="col">Staff</th>
+      <th scope="col">Dealership ID</th>
       <th scope="col">Active</th>
       <th scope="col">Groups</th>
       <th scope="col">Last login</th>
@@ -20,7 +22,7 @@
     </tr>
   </thead>
   <tbody>
-    {% for u, last_login_class, avatar_url in users_with_login %}
+    {% for u, last_login_class, avatar_url, dealership_id, dealership_badge_variant in users_with_login %}
     <tr>
       <td scope="row" class="text-nowrap">
         {% if avatar_url %}
@@ -31,7 +33,13 @@
         {{ u.username }}
       </td>
       <td>{{ u.email|default:"—" }}</td>
-      <td>{% if u.is_staff %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+      <td>
+        {% if dealership_id %}
+          <span class="badge bg-{{ dealership_badge_variant }}{% if dealership_badge_variant == 'warning' %} text-dark{% endif %}">{{ dealership_id }}</span>
+        {% else %}
+          <span class="badge bg-secondary">—</span>
+        {% endif %}
+      </td>
       <td>{% if u.is_active %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
       <td>{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
       <td>
@@ -42,7 +50,7 @@
       <td>{{ u.date_joined|date:"Y-m-d H:i" }}</td>
       {% if can_modify_user_groups %}
       <td class="text-nowrap">
-        <a href="{% url 'Profile:user_edit_groups' u.id %}" class="btn btn-sm btn-outline-primary">Edit groups</a>
+        <a href="{% url 'Profile:user_edit_groups' u.id %}" class="btn btn-sm btn-outline-primary">Edit groups &amp; dealership</a>
         {% if not u.is_superuser and u.username|lower != "admin" %}
         <a href="{% url 'Profile:user_set_password' u.id %}" class="btn btn-sm btn-outline-secondary">Set password</a>
         {% endif %}
@@ -60,4 +68,55 @@
     {% endfor %}
   </tbody>
 </table>
+
+{% if can_manage_dealerships %}
+<h2 class="h4 mt-5 mb-2">Dealerships</h2>
+<p class="text-muted small mb-3">Superuser, Management, and Back Office can manage locations here. You cannot delete a dealership while it still has daily sales, inventory rows, or inventory orders (clear those first). Removing a dealership clears it from user profiles that were assigned to it.</p>
+
+<table class="table">
+  <caption>Dealership list</caption>
+  <thead>
+    <tr>
+      <th scope="col">ID</th>
+      <th scope="col">Name</th>
+      <th scope="col"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in dealerships %}
+    <tr>
+      <td class="text-nowrap">{{ d.pk }}</td>
+      <td>
+        <form method="post" class="d-flex flex-wrap gap-2 align-items-center">
+          {% csrf_token %}
+          <input type="hidden" name="dealership_id" value="{{ d.pk }}">
+          <input type="text" name="dealership_name" value="{{ d.name }}" class="form-control form-control-sm" style="min-width: 12rem; max-width: 28rem;" maxlength="200" required aria-label="Dealership name">
+          <button type="submit" name="update_dealership" value="1" class="btn btn-sm btn-outline-primary">Save</button>
+        </form>
+      </td>
+      <td class="text-nowrap">
+        <form method="post" class="d-inline" onsubmit="return confirm('Delete dealership &quot;{{ d.name }}&quot; (ID {{ d.pk }})? Profiles assigned to this store will lose the assignment.');">
+          {% csrf_token %}
+          <input type="hidden" name="dealership_id" value="{{ d.pk }}">
+          <button type="submit" name="delete_dealership" value="1" class="btn btn-sm btn-outline-danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3" class="text-muted">No dealerships yet. Add one below.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<form method="post" class="row g-2 align-items-end mt-2 mb-4">
+  {% csrf_token %}
+  <div class="col-md-6 col-lg-4">
+    <label for="id_new_dealership_name" class="form-label">Add dealership</label>
+    <input type="text" name="new_dealership_name" id="id_new_dealership_name" class="form-control" placeholder="New location name" maxlength="200">
+  </div>
+  <div class="col-auto">
+    <button type="submit" name="add_dealership" value="1" class="btn btn-primary">Add dealership</button>
+  </div>
+</form>
+{% endif %}
 {% endblock content %}

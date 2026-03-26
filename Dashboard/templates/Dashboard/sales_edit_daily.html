@@ -1,4 +1,6 @@
 {% extends "Dashboard/base.html" %}
+{# Edit a single daily sale: form with product, date, amount; Save/Cancel. #}
+{% block title %}Edit daily sale | {{ block.super }}{% endblock title %}
 {% block content %}
 <h1 class="mb-3">Edit daily sale</h1>
 <form method="post" action="">
@@ -7,6 +9,10 @@
 		<div class="col-auto">
 			<label for="id_product" class="form-label">Product</label>
 			{{ form.product }}
+		</div>
+		<div class="col-auto">
+			<label for="id_dealership" class="form-label">Dealership</label>
+			{{ form.dealership }}
 		</div>
 		<div class="col-auto">
 			<label for="id_date" class="form-label">Date</label>

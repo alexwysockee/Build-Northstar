@@ -1,13 +1,32 @@
 from decimal import Decimal, InvalidOperation
 
 from django.db.models import Sum
+from django.contrib import messages
 from django.http import FileResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 from .forms import ReportForm, EntryForm, SalesProductForm, DailySaleForm
-from .models import Report, SalesProduct, DailySale, Entry, EntryDocument
+from .forms import InventoryRequestForm
+from .inventory_services import (
+    apply_sale_delta,
+    fulfill_inventory_order,
+    get_or_create_inventory_row,
+    quantity_on_hand,
+    inventory_status_tuple,
+    user_home_dealership,
+)
+from .models import (
+    Dealership,
+    DailySale,
+    Entry,
+    EntryDocument,
+    InventoryOrder,
+    ProductInventory,
+    Report,
+    SalesProduct,
+)
 
 
 def _can_modify_daily_sales(user):
@@ -69,29 +88,87 @@ def index(request):
             }
         )
 
+        # Revenue progress is company-wide actual revenue vs revenue goal.
+        # Do NOT cap achieved revenue at the unit goal; if you exceed goal, % should exceed 100%.
         price = p.price or Decimal("0")
-        goal_rev = Decimal(p.goal) * price
-        achieved_units = min(sales_this_month, p.goal)
-        achieved_rev = Decimal(achieved_units) * price
-        revenue_goal += goal_rev
-        revenue_achieved += achieved_rev
+        revenue_goal += Decimal(p.goal) * price
+        revenue_achieved += Decimal(sales_this_month) * price
 
     if revenue_goal > 0:
-        revenue_goal_pct = (revenue_achieved / revenue_goal) * Decimal("100")
+        revenue_goal_pct_raw = (revenue_achieved / revenue_goal) * Decimal("100")
     else:
-        revenue_goal_pct = Decimal("0")
+        revenue_goal_pct_raw = Decimal("0")
 
-    # Clamp for chart display
+    # Clamp only for the circular chart fill (but keep raw % for display).
+    revenue_goal_pct = revenue_goal_pct_raw
     if revenue_goal_pct < 0:
         revenue_goal_pct = Decimal("0")
     if revenue_goal_pct > 100:
         revenue_goal_pct = Decimal("100")
 
+    # Inventory bar chart (x=products, y=units, grouped by dealership).
+    inventory_totals_png_b64 = None
+    try:
+        physical_products = list(
+            SalesProduct.objects.filter(tracks_inventory=True).order_by("display_order", "id")
+        )
+        dealerships = list(Dealership.objects.order_by("name"))
+
+        if physical_products and dealerships:
+            import base64
+            from io import BytesIO
+
+            import matplotlib
+
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            import numpy as np
+
+            product_labels = [p.name for p in physical_products]
+            x = np.arange(len(product_labels))
+            width = 0.8 / max(1, len(dealerships))
+
+            # Larger chart so it is readable on the dashboard.
+            fig, ax = plt.subplots(figsize=(24, 11))
+            for i, deal in enumerate(dealerships):
+                quantities = [quantity_on_hand(p, deal) for p in physical_products]
+                offset = (i - (len(dealerships) - 1) / 2) * width
+                ax.bar(x + offset, quantities, width=width, label=deal.name)
+
+            ax.set_title("Inventory by product (per dealership)", fontsize=18, fontweight="bold")
+            ax.set_ylabel("Units", fontsize=14, fontweight="bold")
+            ax.set_xticks(x)
+            ax.set_xticklabels(
+                product_labels,
+                rotation=45,
+                ha="right",
+                fontsize=13,
+            )
+            ax.tick_params(axis="x", labelsize=13)
+            ax.tick_params(axis="y", labelsize=13)
+            for t in ax.get_xticklabels():
+                t.set_fontweight("bold")
+            for t in ax.get_yticklabels():
+                t.set_fontweight("bold")
+            ax.grid(axis="y", linestyle="--", alpha=0.25)
+            # Make legend much larger for readability.
+            ax.legend(fontsize=18, ncol=2, prop={"weight": "bold"})
+            fig.tight_layout(pad=1.5)
+
+            buf = BytesIO()
+            fig.savefig(buf, format="png", dpi=240)
+            inventory_totals_png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            plt.close(fig)
+    except Exception:
+        inventory_totals_png_b64 = None
+
     context = {
         "dashboard_rows": dashboard_rows,
         "revenue_goal_pct": float(revenue_goal_pct),
+        "revenue_goal_pct_raw": float(revenue_goal_pct_raw),
         "revenue_goal": f"{revenue_goal.quantize(Decimal('0.01'))}",
         "revenue_achieved": f"{revenue_achieved.quantize(Decimal('0.01'))}",
+        "inventory_totals_png_b64": inventory_totals_png_b64,
     }
     return render(request, "Dashboard/index.html", context)
 
@@ -112,12 +189,12 @@ def sales(request):
     daily_sales_this_month = DailySale.objects.filter(
         date__year=now.year,
         date__month=now.month,
-    ).select_related("product").order_by("-date", "-id")
+    ).select_related("product", "dealership").order_by("-date", "-id")
     context = {
         "sales_products": products,
         "daily_sales_this_month": daily_sales_this_month,
         "add_form": SalesProductForm(),
-        "add_daily_form": DailySaleForm(),
+        "add_daily_form": DailySaleForm(user=request.user),
     }
     return render(request, "Dashboard/sales.html", context)
 
@@ -138,9 +215,10 @@ def sales_add_daily(request):
     """Add a daily sale. Allowed only for admin, Sales Rep, Dealership User."""
     if not _can_modify_daily_sales(request.user):
         return HttpResponseForbidden("You don't have permission to add daily sales.")
-    form = DailySaleForm(request.POST)
+    form = DailySaleForm(request.POST, user=request.user)
     if form.is_valid():
-        form.save()
+        obj = form.save()
+        apply_sale_delta(obj.product, obj.dealership, int(obj.amount))
     return redirect("Dashboard:sales")
 
 
@@ -150,12 +228,25 @@ def sales_edit_daily(request, daily_pk):
         return HttpResponseForbidden("You don't have permission to edit daily sales.")
     obj = get_object_or_404(DailySale, pk=daily_pk)
     if request.method == "POST":
-        form = DailySaleForm(request.POST, instance=obj)
+        old_product = obj.product
+        old_dealership = obj.dealership
+        old_amount = int(obj.amount)
+        form = DailySaleForm(request.POST, instance=obj, user=request.user)
         if form.is_valid():
-            form.save()
+            saved = form.save()
+            if old_product.pk != saved.product.pk or old_dealership.pk != saved.dealership.pk:
+                # Remove old delta, apply new delta.
+                apply_sale_delta(old_product, old_dealership, -old_amount)
+                apply_sale_delta(saved.product, saved.dealership, int(saved.amount))
+            else:
+                apply_sale_delta(
+                    saved.product,
+                    saved.dealership,
+                    int(saved.amount) - old_amount,
+                )
             return redirect("Dashboard:sales")
     else:
-        form = DailySaleForm(instance=obj)
+        form = DailySaleForm(instance=obj, user=request.user)
     context = {"form": form, "daily_sale": obj}
     return render(request, "Dashboard/sales_edit_daily.html", context)
 
@@ -166,6 +257,7 @@ def sales_delete_daily(request, daily_pk):
     if not _can_modify_daily_sales(request.user):
         return HttpResponseForbidden("You don't have permission to delete daily sales.")
     obj = get_object_or_404(DailySale, pk=daily_pk)
+    apply_sale_delta(obj.product, obj.dealership, -int(obj.amount))
     obj.delete()
     return redirect("Dashboard:sales")
 
@@ -193,6 +285,265 @@ def sales_update_product(request, product_pk):
         pass
     obj.save()
     return redirect("Dashboard:sales")
+
+
+def _can_view_all_inventory(user):
+    """Managers/admin: see inventory for every dealership."""
+    if not user.is_authenticated:
+        return False
+    if user.is_staff:
+        return True
+    return user.groups.filter(name="Management").exists()
+
+
+def _can_submit_inventory_order(user):
+    """Sales Rep and Dealership User can submit stock requests."""
+    if not user.is_authenticated:
+        return False
+    if user.is_staff:
+        return True
+    return user.groups.filter(name__in=["Sales Rep", "Dealership User"]).exists()
+
+
+def _can_manage_inventory_orders(user):
+    """Mark requests as delivered and increase on-hand counts."""
+    if not user.is_authenticated:
+        return False
+    if user.is_staff:
+        return True
+    return user.groups.filter(name__in=["Management", "Back Office"]).exists()
+
+
+def inventory(request):
+    """
+    Inventory page: per-dealership stock table + inventory request/order tracking.
+    """
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("You must be logged in.")
+
+    can_view_all = _can_view_all_inventory(request.user)
+    can_submit = _can_submit_inventory_order(request.user)
+    can_manage_orders = _can_manage_inventory_orders(request.user)
+
+    physical_products = (
+        SalesProduct.objects.filter(tracks_inventory=True)
+        .order_by("display_order", "id")
+        .all()
+    )
+
+    home = user_home_dealership(request.user) if not can_view_all else None
+    if can_view_all:
+        dealerships = list(Dealership.objects.order_by("name"))
+    else:
+        # If a user has no assigned home dealership yet, show everything as a WIP fallback
+        # so the page remains usable.
+        dealerships = [home] if home else list(Dealership.objects.order_by("name"))
+
+    dealership_sections = []
+    for deal in dealerships:
+        rows = []
+        for p in physical_products:
+            qty = quantity_on_hand(p, deal)
+            _, status_label, badge_variant = inventory_status_tuple(qty)
+            rows.append(
+                {
+                    "product": p,
+                    "quantity": qty,
+                    "status_label": status_label,
+                    "badge_variant": badge_variant,
+                }
+            )
+        dealership_sections.append({"dealership": deal, "rows": rows})
+
+    orders_qs = InventoryOrder.objects.select_related("product", "dealership", "requested_by").order_by(
+        "-date_requested"
+    )
+    if not can_view_all and home:
+        orders_qs = orders_qs.filter(dealership=home)
+
+    order_form = InventoryRequestForm(user=request.user)
+    pending_order_count = orders_qs.filter(status=InventoryOrder.STATUS_PENDING).count()
+
+    context = {
+        "dealership_sections": dealership_sections,
+        "physical_products": physical_products,
+        "inventory_orders": orders_qs[:200],
+        "order_form": order_form,
+        "can_view_all_inventory": can_view_all,
+        "can_submit_inventory_order": can_submit,
+        "can_manage_inventory_orders": can_manage_orders,
+        "user_dealership": user_home_dealership(request.user),
+        "pending_order_count": pending_order_count,
+    }
+    return render(request, "Dashboard/inventory.html", context)
+
+
+@require_POST
+def inventory_order_submit(request):
+    """Create a pending InventoryOrder."""
+    if not _can_submit_inventory_order(request.user):
+        return HttpResponseForbidden("You don't have permission to submit inventory orders.")
+    form = InventoryRequestForm(request.POST, user=request.user)
+    if form.is_valid():
+        order = form.save(commit=False)
+        order.requested_by = request.user
+        order.status = InventoryOrder.STATUS_PENDING
+        order.save()
+        messages.success(
+            request,
+            f"Inventory request submitted successfully (order #{order.display_order_id}). Status: Pending.",
+        )
+    else:
+        messages.error(request, f"Could not submit order. {form.errors.as_text()}")
+    return redirect("Dashboard:inventory")
+
+
+@require_POST
+def inventory_order_deliver(request, order_pk):
+    """Manager/admin: mark order delivered and add quantity to on-hand inventory."""
+    if not _can_manage_inventory_orders(request.user):
+        return HttpResponseForbidden("You don't have permission to mark orders as delivered.")
+
+    order = get_object_or_404(InventoryOrder, pk=order_pk)
+    if order.status != InventoryOrder.STATUS_PENDING:
+        messages.warning(request, "That order is not pending.")
+        return redirect("Dashboard:inventory")
+
+    fulfill_inventory_order(order)
+    messages.success(
+        request,
+        f"Order #{order.display_order_id} marked delivered. Stock at {order.dealership.name} updated.",
+    )
+    return redirect("Dashboard:inventory")
+
+
+def _can_access_claims(user):
+    """WIP Claims page access."""
+    if not user.is_authenticated:
+        return False
+    if user.is_staff:
+        return True
+    return user.groups.filter(
+        name__in=["Management", "Back Office", "Sales Rep", "Dealership User"]
+    ).exists()
+
+
+def _can_access_inspections(user):
+    """WIP Inspections page access (same roles as claims for now)."""
+    return _can_access_claims(user)
+
+
+def claims(request):
+    """Claims page (WIP stub)."""
+    if not _can_access_claims(request.user):
+        return HttpResponseForbidden("You don't have permission to view claims.")
+
+    wip_mode = True
+    claim_status_choices = [
+        ("draft", "Draft"),
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("received", "Received"),
+    ]
+
+    # Dummy context (test stub) to keep the page usable until real models exist.
+    dealerships = [
+        {"pk": 1, "name": "Default Dealership"},
+        {"pk": 2, "name": "Northside Motors"},
+        {"pk": 3, "name": "Westside Auto"},
+    ]
+    products = list(SalesProduct.objects.all()[:6])
+    products_stub = [{"pk": p.pk, "name": p.name} for p in products]
+
+    sample_claims = [
+        {
+            "id": 1,
+            "status": "pending",
+            "dealership": dealerships[0],
+            "product": products_stub[0] if products_stub else {"pk": None, "name": "—"},
+            "quantity": 4,
+            "submitted_at": timezone.now(),
+            "customer_name": "Customer 1",
+        }
+    ]
+
+    submitted_stub_data = None
+    if request.method == "POST":
+        submitted_stub_data = {
+            "customer_name": (request.POST.get("customer_name") or "").strip(),
+            "dealership_id": request.POST.get("dealership_id") or "",
+            "product_id": request.POST.get("product_id") or "",
+            "order_number": (request.POST.get("order_number") or "").strip(),
+            "quantity": request.POST.get("quantity") or "",
+            "reason": (request.POST.get("reason") or "").strip(),
+        }
+        messages.success(request, "Claim submission received (WIP stub). No data was saved yet.")
+
+    context = {
+        "wip_mode": wip_mode,
+        "claim_status_choices": claim_status_choices,
+        "dealerships": dealerships,
+        "products": products_stub,
+        "sample_claims": sample_claims,
+        "submitted_stub_data": submitted_stub_data,
+    }
+    return render(request, "Dashboard/claims.html", context)
+
+
+def inspections(request):
+    """Inspections page (WIP stub)."""
+    if not _can_access_inspections(request.user):
+        return HttpResponseForbidden("You don't have permission to view inspections.")
+
+    wip_mode = True
+    inspection_type_choices = [
+        ("warranty", "Extended warranty"),
+        ("claim", "Claim inspection"),
+        ("other", "Other"),
+    ]
+
+    dealerships = [
+        {"pk": 1, "name": "Default Dealership"},
+        {"pk": 2, "name": "Northside Motors"},
+        {"pk": 3, "name": "Westside Auto"},
+    ]
+    products = list(SalesProduct.objects.all()[:6])
+    products_stub = [{"pk": p.pk, "name": p.name} for p in products]
+
+    sample_appointments = [
+        {
+            "id": 1,
+            "status": "scheduled",
+            "dealership": dealerships[1],
+            "product": products_stub[1] if len(products_stub) > 1 else (products_stub[0] if products_stub else {"pk": None, "name": "—"}),
+            "appointment_time": timezone.now(),
+            "request_number": "REQ-1001",
+        }
+    ]
+
+    submitted_stub_data = None
+    if request.method == "POST":
+        submitted_stub_data = {
+            "request_number": (request.POST.get("request_number") or "").strip(),
+            "inspection_type": request.POST.get("inspection_type") or "",
+            "dealership_id": request.POST.get("dealership_id") or "",
+            "product_id": request.POST.get("product_id") or "",
+            "appointment_time": (request.POST.get("appointment_time") or "").strip(),
+            "inspector_name": (request.POST.get("inspector_name") or "").strip(),
+            "notes": (request.POST.get("notes") or "").strip(),
+        }
+        messages.success(request, "Inspection booking received (WIP stub). No data was saved yet.")
+
+    context = {
+        "wip_mode": wip_mode,
+        "inspection_type_choices": inspection_type_choices,
+        "dealerships": dealerships,
+        "products": products_stub,
+        "sample_appointments": sample_appointments,
+        "submitted_stub_data": submitted_stub_data,
+    }
+    return render(request, "Dashboard/inspections.html", context)
 
 
 def Reports(request):
