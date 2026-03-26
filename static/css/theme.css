@@ -1,8 +1,10 @@
 /* Northstar "bubbly" blue/white theme (Bootstrap-friendly) */
 
 :root {
-  --theme-primary: #0d6efd;
-  --theme-primary-dark: #0a58ca;
+  /* Brand primary (exact) */
+  --theme-primary: #0976f0;
+  /* Slightly darker companion shade for hover/borders */
+  --theme-primary-dark: #075fcb;
   --theme-primary-soft: rgba(13, 110, 253, 0.12);
   --theme-ink: #0b1220;
   --theme-muted: #5b6678;
@@ -67,9 +69,18 @@ main {
 
 /* Navbar */
 .navbar.bg-primary {
-  background: linear-gradient(90deg, var(--theme-primary-dark), var(--theme-primary)) !important;
+  /* Keep exact Bootstrap "primary" blue for brand/logo fidelity */
+  background-color: var(--theme-primary) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 10px 24px rgba(11, 18, 32, 0.12);
+}
+
+.navbar .navbar-brand {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.navbar .navbar-brand img {
+  display: block; /* removes baseline gap so logo sits flush */
 }
 
 .navbar .nav-link {
