@@ -2,7 +2,17 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 
-from .models import Claim, Dealership, Report, Entry, SalesProduct, DailySale, EntryDocument
+from .models import (
+    Claim,
+    Dealership,
+    Report,
+    Entry,
+    SalesProduct,
+    DailySale,
+    EntryDocument,
+    Inspection,
+    InspectionPhoto,
+)
 
 #test
 # Custom User admin so Groups are easy to assign in the admin
@@ -16,7 +26,10 @@ admin.site.register(User, UserAdmin)
 admin.site.register(Report)
 admin.site.register(Entry)
 admin.site.register(EntryDocument)
-admin.site.register(SalesProduct)
+@admin.register(SalesProduct)
+class SalesProductAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+    list_display = ("name", "price", "goal", "tracks_inventory")
 
 
 @admin.register(DailySale)
@@ -58,3 +71,28 @@ class ClaimAdmin(admin.ModelAdmin):
     @admin.display(description="Product")
     def sale_product(self, obj):
         return obj.daily_sale.product.name if obj.daily_sale_id else "—"
+
+
+class InspectionPhotoInline(admin.TabularInline):
+    model = InspectionPhoto
+    extra = 0
+
+
+@admin.register(Inspection)
+class InspectionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "inspection_date",
+        "vin",
+        "dealership",
+        "product",
+        "passed",
+        "customer_name",
+        "recorded_by",
+        "created_at",
+    )
+    list_filter = ("passed", "dealership", "inspection_date")
+    search_fields = ("vin", "customer_name", "notes", "installer_name", "daily_sale__order_number")
+    autocomplete_fields = ("daily_sale", "dealership", "product", "recorded_by")
+    readonly_fields = ("created_at",)
+    inlines = [InspectionPhotoInline]

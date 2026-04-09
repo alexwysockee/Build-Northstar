@@ -3,126 +3,210 @@
 {% block title %}Inspections | {{ block.super }}{% endblock title %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
 	<h1 class="mb-0">Inspections</h1>
-	<span class="badge bg-warning text-dark">WIP</span>
 </div>
-
-<div class="p-3 bg-white border rounded mb-4">
-	<h2 class="h5 mb-2">Test stub</h2>
-	<p class="text-muted small mb-0">
-		This page is WIP. It provides dummy appointment queue data and echoes bookings
-		(without saving to the DB).
-	</p>
-</div>
+<p class="text-muted small mb-4">
+	Scope: <strong>{{ inspections_scope_label }}</strong>
+	{% if request.ns_can_view_all_dealerships %}(all dealerships){% else %}(your dealership only){% endif %}
+</p>
 
 <div class="row">
-	<div class="col-lg-7 mb-4">
-		<div class="p-3 bg-white border rounded h-100">
-			<h2 class="h5 mb-3">Appointment queue (dummy data)</h2>
-			{% if sample_appointments %}
+	<div class="col-lg-8 mb-4">
+		<div class="card mb-0 h-100">
+			<div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+				<span class="fw-semibold">Inspection history</span>
+				<form method="get" action="" class="d-flex flex-wrap align-items-center gap-2">
+					<label class="visually-hidden" for="id_vin_filter">Filter by VIN</label>
+					<input
+						type="search"
+						name="vin"
+						id="id_vin_filter"
+						class="form-control form-control-sm font-monospace"
+						style="max-width: 14rem;"
+						placeholder="Filter by VIN"
+						value="{{ vin_filter }}"
+						maxlength="17"
+						autocomplete="off"
+					/>
+					<button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
+					{% if vin_filter %}
+						<a href="{% url ns_site_namespace|add:':inspections' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+					{% endif %}
+				</form>
+			</div>
+			<div class="card-body p-0">
+			{% if inspections_list %}
+			<div class="table-responsive">
 			<table class="table table-sm align-middle mb-0">
 				<thead class="table-light">
 					<tr>
-						<th scope="col">Request</th>
+						<th scope="col">Date</th>
 						<th scope="col">Dealership</th>
-						<th scope="col">Product</th>
-						<th scope="col">Status</th>
+						<th scope="col">Customer</th>
+						<th scope="col">Result</th>
+						<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
 					</tr>
 				</thead>
 				<tbody>
-					{% for a in sample_appointments %}
+					{% for row in inspections_list %}
 					<tr>
-						<td class="font-monospace">{{ a.request_number }}</td>
-						<td>{{ a.dealership.name }}</td>
-						<td>{{ a.product.name }}</td>
+						<td class="text-nowrap small">{{ row.inspection_date|date:"Y-m-d" }}</td>
 						<td>
-							{% if a.status == "completed" %}
-								<span class="badge bg-success">Completed</span>
-							{% elif a.status == "in_progress" %}
-								<span class="badge bg-info text-dark">In progress</span>
+							<span class="badge rounded-pill text-bg-dark ns-dealership-badge {{ row.dealership.resolved_badge_css_class }}">{{ row.dealership.name }}</span>
+						</td>
+						<td class="small">{{ row.customer_name }}</td>
+						<td>
+							{% if row.passed %}
+								<span class="badge bg-success">Pass</span>
 							{% else %}
-								<span class="badge bg-warning text-dark">Scheduled</span>
+								<span class="badge bg-danger">Fail</span>
 							{% endif %}
+						</td>
+						<td class="text-end text-nowrap">
+							<a href="{% url ns_site_namespace|add:':inspection_detail' row.pk %}" class="btn btn-sm btn-outline-primary">View</a>
 						</td>
 					</tr>
 					{% endfor %}
 				</tbody>
 			</table>
+			</div>
 			{% else %}
-				<p class="text-muted small mb-0">No dummy appointments.</p>
+			<div class="card-body">
+				<p class="text-muted small mb-0">No inspections yet{% if vin_filter %} for this VIN filter{% endif %}.</p>
+			</div>
 			{% endif %}
+			</div>
 		</div>
 	</div>
 
-	<div class="col-lg-5">
-		<div class="p-3 bg-white border rounded h-100">
-			<h2 class="h5 mb-3">Book an inspection (WIP stub)</h2>
-			<form method="post" action="">
-				{% csrf_token %}
+	<div class="col-lg-4">
+		<div class="card mb-0 h-100">
+			<div class="card-header fw-semibold">Record inspection</div>
+			<div class="card-body">
+				<form method="post" action="" enctype="multipart/form-data" novalidate>
+					{% csrf_token %}
 
-				<div class="mb-3">
-					<label class="form-label" for="id_request_number">Request number</label>
-					<input class="form-control" type="text" id="id_request_number" name="request_number" maxlength="50" placeholder="e.g. REQ-1001" />
-				</div>
+					<div class="mb-3">
+						<label class="form-label" for="id_order_ref">{{ inspection_form.order_ref.label }}</label>
+						{{ inspection_form.order_ref }}
+						{% if inspection_form.order_ref.help_text %}
+							<div class="form-text">{{ inspection_form.order_ref.help_text }}</div>
+						{% endif %}
+						{% if inspection_form.order_ref.errors %}
+							<div class="invalid-feedback d-block">{{ inspection_form.order_ref.errors.0 }}</div>
+						{% endif %}
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_inspection_type">Inspection type</label>
-					<select class="form-select" id="id_inspection_type" name="inspection_type">
-						<option value="">-- pick --</option>
-						{% for val, label in inspection_type_choices %}
-							<option value="{{ val }}">{{ label }}</option>
+					<div class="mb-3">
+						<label class="form-label" for="id_dealership">{{ inspection_form.dealership.label }}</label>
+						{{ inspection_form.dealership }}
+						{% if inspection_form.dealership.errors %}
+							<div class="invalid-feedback d-block">{{ inspection_form.dealership.errors.0 }}</div>
+						{% endif %}
+					</div>
+
+					<div class="mb-3">
+						<label class="form-label" for="id_product">{{ inspection_form.product.label }}</label>
+						{{ inspection_form.product }}
+						{% if inspection_form.product.errors %}
+							<div class="invalid-feedback d-block">{{ inspection_form.product.errors.0 }}</div>
+						{% endif %}
+					</div>
+
+					<div class="mb-3">
+						<label class="form-label" for="id_customer_name">{{ inspection_form.customer_name.label }}</label>
+						{{ inspection_form.customer_name }}
+						{% if inspection_form.customer_name.errors %}
+							<div class="invalid-feedback d-block">{{ inspection_form.customer_name.errors.0 }}</div>
+						{% endif %}
+					</div>
+
+					<div class="mb-3">
+						<label class="form-label" for="id_vin">{{ inspection_form.vin.label }}</label>
+						{{ inspection_form.vin }}
+						{% if inspection_form.vin.errors %}
+							<div class="invalid-feedback d-block">{{ inspection_form.vin.errors.0 }}</div>
+						{% endif %}
+					</div>
+
+					<div class="row g-2 mb-3">
+						<div class="col-md-6">
+							<label class="form-label" for="id_inspection_date">{{ inspection_form.inspection_date.label }}</label>
+							{{ inspection_form.inspection_date }}
+							{% if inspection_form.inspection_date.errors %}
+								<div class="invalid-feedback d-block">{{ inspection_form.inspection_date.errors.0 }}</div>
+							{% endif %}
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="id_odometer">{{ inspection_form.odometer.label }}</label>
+							{{ inspection_form.odometer }}
+							{% if inspection_form.odometer.errors %}
+								<div class="invalid-feedback d-block">{{ inspection_form.odometer.errors.0 }}</div>
+							{% endif %}
+						</div>
+					</div>
+
+					<div class="mb-3">
+						<label class="form-label" for="id_installer_name">{{ inspection_form.installer_name.label }}</label>
+						{{ inspection_form.installer_name }}
+						{% if inspection_form.installer_name.errors %}
+							<div class="invalid-feedback d-block">{{ inspection_form.installer_name.errors.0 }}</div>
+						{% endif %}
+					</div>
+
+					<div class="mb-3">
+						<span class="form-label d-block">{{ inspection_form.result.label }}</span>
+						{% for radio in inspection_form.result %}
+							<div class="form-check form-check-inline">
+								{{ radio.tag }}
+								<label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+							</div>
 						{% endfor %}
-					</select>
-				</div>
+						{% if inspection_form.result.errors %}
+							<div class="invalid-feedback d-block">{{ inspection_form.result.errors.0 }}</div>
+						{% endif %}
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_dealership_id">Dealership</label>
-					<select class="form-select" id="id_dealership_id" name="dealership_id">
-						<option value="">-- pick --</option>
-						{% for d in dealerships %}
-							<option value="{{ d.pk }}">{{ d.name }}</option>
-						{% endfor %}
-					</select>
-				</div>
+					<div class="mb-3">
+						<label class="form-label">Issue flags</label>
+						<div class="form-check">
+							{{ inspection_form.issue_damage }}
+							<label class="form-check-label" for="id_issue_damage">{{ inspection_form.issue_damage.label }}</label>
+						</div>
+						<div class="form-check">
+							{{ inspection_form.issue_incomplete }}
+							<label class="form-check-label" for="id_issue_incomplete">{{ inspection_form.issue_incomplete.label }}</label>
+						</div>
+						<div class="form-check">
+							{{ inspection_form.issue_warranty }}
+							<label class="form-check-label" for="id_issue_warranty">{{ inspection_form.issue_warranty.label }}</label>
+						</div>
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_product_id">Product</label>
-					<select class="form-select" id="id_product_id" name="product_id">
-						<option value="">-- pick --</option>
-						{% for p in products %}
-							<option value="{{ p.pk }}">{{ p.name }}</option>
-						{% endfor %}
-					</select>
-				</div>
+					<div class="mb-3">
+						<label class="form-label" for="id_notes">{{ inspection_form.notes.label }}</label>
+						{{ inspection_form.notes }}
+						{% if inspection_form.notes.errors %}
+							<div class="invalid-feedback d-block">{{ inspection_form.notes.errors.0 }}</div>
+						{% endif %}
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_appointment_time">Appointment time</label>
-					<input class="form-control" type="text" id="id_appointment_time" name="appointment_time" placeholder="e.g. 2026-03-26 14:30" />
-				</div>
+					<div class="mb-3">
+						<label class="form-label" for="id_photos">Photos</label>
+						<input type="file" name="photos" id="id_photos" class="form-control" accept="image/*" multiple />
+						<div class="form-text">Optional images documenting the inspection.</div>
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_inspector_name">Inspector name</label>
-					<input class="form-control" type="text" id="id_inspector_name" name="inspector_name" maxlength="200" placeholder="e.g. Alex Inspector" />
-				</div>
+					{% if inspection_form.non_field_errors %}
+						<div class="alert alert-danger py-2 small mb-3">{{ inspection_form.non_field_errors.0 }}</div>
+					{% endif %}
 
-				<div class="mb-3">
-					<label class="form-label" for="id_notes">Notes</label>
-					<textarea class="form-control" id="id_notes" name="notes" rows="3" placeholder="Optional stub notes"></textarea>
-				</div>
-
-				<button type="submit" class="btn btn-primary w-100">Book inspection (WIP)</button>
-			</form>
-
-			{% if submitted_stub_data %}
-				<div class="mt-3">
-					<h3 class="h6 mb-2">Submission echo</h3>
-					<pre class="bg-light border rounded p-2 mb-0" style="white-space: pre-wrap;">{{ submitted_stub_data }}</pre>
-				</div>
-			{% endif %}
+					<button type="submit" class="btn btn-primary w-100">Save inspection</button>
+				</form>
+			</div>
 		</div>
 	</div>
 </div>
 
 {% endblock content %}
-

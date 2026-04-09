@@ -284,3 +284,69 @@ class Claim(models.Model):
 
     def __str__(self):
         return f"Claim {self.pk} — {self.daily_sale.product.name} @ {self.daily_sale.dealership.name}"
+
+
+class Inspection(models.Model):
+    """Vehicle inspection: linked to sale/dealership/product; supports history per VIN."""
+
+    daily_sale = models.ForeignKey(
+        DailySale,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inspections",
+        help_text="Optional link to a recorded sale (order).",
+    )
+    dealership = models.ForeignKey(Dealership, on_delete=models.PROTECT, related_name="inspections")
+    product = models.ForeignKey(SalesProduct, on_delete=models.PROTECT, related_name="inspections")
+    customer_name = models.CharField(max_length=200)
+    vin = models.CharField(max_length=17, help_text="Vehicle identification number")
+    inspection_date = models.DateField()
+    odometer = models.PositiveIntegerField(null=True, blank=True)
+    installer_name = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Installer or employee who performed the inspection.",
+    )
+    passed = models.BooleanField(help_text="True = pass, False = fail")
+    notes = models.TextField(blank=True)
+    issue_damage = models.BooleanField(default=False)
+    issue_incomplete = models.BooleanField(default=False)
+    issue_warranty = models.BooleanField(default=False)
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inspections_recorded",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-inspection_date", "-id"]
+        indexes = [
+            models.Index(fields=["vin"]),
+            models.Index(fields=["dealership", "-inspection_date"]),
+        ]
+
+    def sale_order_label(self) -> str:
+        if self.daily_sale_id:
+            return self.daily_sale.display_order_number()
+        return "—"
+
+    def __str__(self):
+        return f"Inspection {self.pk} {self.vin} @ {self.dealership.name} ({self.inspection_date})"
+
+
+class InspectionPhoto(models.Model):
+    """Photo attached to an inspection."""
+
+    inspection = models.ForeignKey(Inspection, on_delete=models.CASCADE, related_name="photos")
+    image = models.ImageField(upload_to="inspection_photos/%Y/%m/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at", "id"]
+
+    def __str__(self):
+        return f"Photo for inspection {self.inspection_id}"

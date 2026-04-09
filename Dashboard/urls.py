@@ -31,5 +31,6 @@ urlpatterns = [
     path("claims/", views.claims, name="claims"),
     path("claims/<int:claim_pk>/status/", views.claim_set_status, name="claim_set_status"),
     path("claims/<int:claim_pk>/", views.claim_detail, name="claim_detail"),
+    path("inspections/<int:inspection_pk>/", views.inspection_detail, name="inspection_detail"),
     path("inspections/", views.inspections, name="inspections"),
 ]

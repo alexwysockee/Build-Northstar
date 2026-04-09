@@ -3,7 +3,7 @@ from django.contrib.auth.models import User, Group
 from django.utils import timezone
 
 from Profile.models import UserProfile
-from .models import Claim, Dealership, SalesProduct, ProductInventory, DailySale
+from .models import Claim, Dealership, Inspection, SalesProduct, ProductInventory, DailySale
 
 class C3SystemTestSuite(TestCase):
     """
@@ -189,3 +189,48 @@ class C3SystemTestSuite(TestCase):
         self.assertEqual(r.status_code, 302)
         claim.refresh_from_db()
         self.assertEqual(claim.status, Claim.STATUS_APPROVED)
+
+    def test_inspections_post_saves_and_lists(self):
+        """Record an inspection (staff); appears in history table."""
+        admin = User.objects.create_superuser(username="insp_admin", password="password", email="insp@test.com")
+        self.client.login(username="insp_admin", password="password")
+        r = self.client.get("/home/inspections/")
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Inspection history")
+
+        r = self.client.post(
+            "/home/inspections/",
+            {
+                "dealership": str(self.dealer.id),
+                "product": str(self.product.id),
+                "customer_name": "Test Customer",
+                "vin": "1HGBH41JXMN109186",
+                "inspection_date": "2026-04-09",
+                "odometer": "12000",
+                "installer_name": "Alex Installer",
+                "result": "pass",
+                "notes": "Looks good",
+                "issue_damage": "",
+                "issue_incomplete": "",
+                "issue_warranty": "",
+            },
+        )
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Inspection.objects.count(), 1)
+        insp = Inspection.objects.get()
+        self.assertTrue(insp.passed)
+        self.assertEqual(insp.vin, "1HGBH41JXMN109186")
+        self.assertEqual(insp.dealership_id, self.dealer.id)
+
+        page = self.client.get("/home/inspections/")
+        self.assertContains(page, "Test Customer")
+        self.assertContains(page, "Pass")
+        self.assertContains(page, "View")
+
+        detail = self.client.get(f"/home/inspections/{insp.pk}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "1HGBH41JXMN109186")
+        self.assertContains(detail, "Test Customer")
+
+        filtered = self.client.get("/home/inspections/?vin=1HGBH41")
+        self.assertContains(filtered, "Test Customer")

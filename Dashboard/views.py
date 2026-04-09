@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 from .forms import ReportForm, EntryForm, SalesProductForm, DailySaleForm
-from .forms import InventoryRequestForm, ClaimForm, ClaimStatusForm
+from .forms import InventoryRequestForm, ClaimForm, ClaimStatusForm, InspectionForm
 from .inventory_services import (
     apply_sale_delta,
     cancel_inventory_order,
@@ -28,6 +28,8 @@ from .models import (
     DailySale,
     Entry,
     EntryDocument,
+    Inspection,
+    InspectionPhoto,
     InventoryOrder,
     ProductInventory,
     Report,
@@ -831,58 +833,85 @@ def claim_set_status(request, claim_pk):
 
 
 def inspections(request):
-    """Inspections page (WIP stub)."""
+    """Vehicle inspections: list (scoped by dealership), optional VIN filter, record new inspection."""
     if not _can_access_inspections(request.user):
         return HttpResponseForbidden("You don't have permission to view inspections.")
 
-    wip_mode = True
-    inspection_type_choices = [
-        ("warranty", "Extended warranty"),
-        ("claim", "Claim inspection"),
-        ("other", "Other"),
-    ]
+    can_view_all = user_can_view_all_dealerships(request.user)
+    home_dealership = getattr(request, "ns_dealership", None)
+    if not can_view_all and not home_dealership:
+        return HttpResponseForbidden("No dealership is assigned to your user.")
 
-    dealerships = [
-        {"pk": 1, "name": "C3 Mississauga"},
-        {"pk": 2, "name": "Northside Motors"},
-        {"pk": 3, "name": "Westside Auto"},
-    ]
-    products = list(SalesProduct.objects.all()[:6])
-    products_stub = [{"pk": p.pk, "name": p.name} for p in products]
+    ns = getattr(request, "ns_site_namespace", None) or "Dashboard"
 
-    sample_appointments = [
-        {
-            "id": 1,
-            "status": "scheduled",
-            "dealership": dealerships[1],
-            "product": products_stub[1] if len(products_stub) > 1 else (products_stub[0] if products_stub else {"pk": None, "name": "—"}),
-            "appointment_time": timezone.now(),
-            "request_number": "REQ-1001",
-        }
-    ]
+    inspections_qs = Inspection.objects.select_related(
+        "daily_sale",
+        "dealership",
+        "product",
+        "recorded_by",
+    )
+    if not can_view_all and home_dealership:
+        inspections_qs = inspections_qs.filter(dealership=home_dealership)
 
-    submitted_stub_data = None
+    vin_filter = (request.GET.get("vin") or "").strip().upper()
+    if vin_filter:
+        inspections_qs = inspections_qs.filter(vin__icontains=vin_filter)
+
     if request.method == "POST":
-        submitted_stub_data = {
-            "request_number": (request.POST.get("request_number") or "").strip(),
-            "inspection_type": request.POST.get("inspection_type") or "",
-            "dealership_id": request.POST.get("dealership_id") or "",
-            "product_id": request.POST.get("product_id") or "",
-            "appointment_time": (request.POST.get("appointment_time") or "").strip(),
-            "inspector_name": (request.POST.get("inspector_name") or "").strip(),
-            "notes": (request.POST.get("notes") or "").strip(),
-        }
-        messages.success(request, "Inspection booking received (WIP stub). No data was saved yet.")
+        form = InspectionForm(request.POST, request.FILES, user=request.user)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.recorded_by = request.user
+            obj.save()
+            for f in request.FILES.getlist("photos"):
+                if not f:
+                    continue
+                InspectionPhoto.objects.create(inspection=obj, image=f)
+            messages.success(
+                request,
+                f"Inspection #{obj.pk} recorded for VIN {obj.vin} ({'Pass' if obj.passed else 'Fail'}).",
+            )
+            return redirect(f"{ns}:inspections")
+        _messages_for_invalid_form(request, form, context_note="Inspection was not saved:")
+    else:
+        form = InspectionForm(user=request.user)
 
     context = {
-        "wip_mode": wip_mode,
-        "inspection_type_choices": inspection_type_choices,
-        "dealerships": dealerships,
-        "products": products_stub,
-        "sample_appointments": sample_appointments,
-        "submitted_stub_data": submitted_stub_data,
+        "inspection_form": form,
+        "inspections_list": inspections_qs.order_by("-inspection_date", "-id")[:500],
+        "inspections_scope_label": (
+            "Company wide" if can_view_all else (home_dealership.name if home_dealership else "Dealership")
+        ),
+        "vin_filter": vin_filter,
     }
     return render(request, "Dashboard/inspections.html", context)
+
+
+def inspection_detail(request, inspection_pk):
+    """Single inspection: full fields (same dealership scope as inspections list)."""
+    if not _can_access_inspections(request.user):
+        return HttpResponseForbidden("You don't have permission to view inspections.")
+
+    can_view_all = user_can_view_all_dealerships(request.user)
+    home_dealership = getattr(request, "ns_dealership", None)
+    if not can_view_all and not home_dealership:
+        return HttpResponseForbidden("No dealership is assigned to your user.")
+
+    qs = Inspection.objects.select_related(
+        "daily_sale",
+        "dealership",
+        "product",
+        "recorded_by",
+    ).prefetch_related("photos")
+    if not can_view_all and home_dealership:
+        qs = qs.filter(dealership=home_dealership)
+    inspection = get_object_or_404(qs, pk=inspection_pk)
+
+    return render(
+        request,
+        "Dashboard/inspection_detail.html",
+        {"inspection": inspection},
+    )
 
 
 def Reports(request):

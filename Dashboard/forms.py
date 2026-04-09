@@ -4,7 +4,16 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 from .inventory_services import quantity_on_hand, user_home_dealership
-from .models import Claim, Dealership, DailySale, InventoryOrder, Entry, Report, SalesProduct
+from .models import (
+    Claim,
+    Dealership,
+    DailySale,
+    Inspection,
+    InventoryOrder,
+    Entry,
+    Report,
+    SalesProduct,
+)
 
 
 def daily_sales_queryset_for_claim_user(user):
@@ -316,3 +325,160 @@ class ClaimStatusForm(forms.Form):
         choices=Claim.STATUS_CHOICES,
         widget=forms.Select(attrs={"class": "form-select"}),
     )
+
+
+class InspectionForm(forms.ModelForm):
+    """Record an inspection; optionally link a sale via order number (same resolution as claims)."""
+
+    order_ref = forms.CharField(
+        label="Order number (optional)",
+        max_length=80,
+        required=False,
+        help_text="Link to a recorded sale (e.g. NS-000042). Leave blank if there is no sale to attach.",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "e.g. NS-000042",
+                "maxlength": 80,
+                "autocomplete": "off",
+            }
+        ),
+    )
+
+    RESULT_PASS = "pass"
+    RESULT_FAIL = "fail"
+    result = forms.ChoiceField(
+        label="Result",
+        choices=[
+            (RESULT_PASS, "Pass"),
+            (RESULT_FAIL, "Fail"),
+        ],
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+    )
+
+    class Meta:
+        model = Inspection
+        fields = [
+            "dealership",
+            "product",
+            "customer_name",
+            "vin",
+            "inspection_date",
+            "odometer",
+            "installer_name",
+            "notes",
+            "issue_damage",
+            "issue_incomplete",
+            "issue_warranty",
+        ]
+        labels = {
+            "dealership": "Dealership",
+            "product": "Product sold",
+            "customer_name": "Customer",
+            "vin": "VIN",
+            "inspection_date": "Inspection date",
+            "odometer": "Odometer",
+            "installer_name": "Installer / employee",
+            "notes": "Notes",
+            "issue_damage": "Damage",
+            "issue_incomplete": "Incomplete application",
+            "issue_warranty": "Warranty concerns",
+        }
+        widgets = {
+            "dealership": forms.Select(attrs={"class": "form-select"}),
+            "product": forms.Select(attrs={"class": "form-select"}),
+            "customer_name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Customer name", "maxlength": 200}
+            ),
+            "vin": forms.TextInput(
+                attrs={"class": "form-control font-monospace", "placeholder": "17-character VIN", "maxlength": 17}
+            ),
+            "inspection_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "odometer": forms.NumberInput(attrs={"class": "form-control", "min": 0, "placeholder": "Miles or km"}),
+            "installer_name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "Who performed the inspection", "maxlength": 200}
+            ),
+            "notes": forms.Textarea(
+                attrs={"class": "form-control", "rows": 3, "placeholder": "Optional notes"}
+            ),
+            "issue_damage": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "issue_incomplete": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "issue_warranty": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        self._user = user
+        super().__init__(*args, **kwargs)
+
+        from django.utils import timezone
+
+        if not self.instance.pk and "inspection_date" not in (self.data or {}):
+            self.initial.setdefault("inspection_date", timezone.localdate())
+
+        can_pick_any = bool(
+            self._user
+            and self._user.is_authenticated
+            and (
+                self._user.is_staff
+                or getattr(self._user, "is_superuser", False)
+                or self._user.groups.filter(name__in=["Management", "Back Office"]).exists()
+            )
+        )
+        if can_pick_any:
+            self.fields["dealership"].queryset = Dealership.objects.all().order_by("name")
+        else:
+            home = user_home_dealership(self._user) if self._user and self._user.is_authenticated else None
+            if home:
+                self.fields["dealership"].queryset = Dealership.objects.filter(pk=home.pk)
+                if not self.instance.pk:
+                    self.initial.setdefault("dealership", home.pk)
+            else:
+                self.fields["dealership"].queryset = Dealership.objects.none()
+
+        self.fields["product"].queryset = SalesProduct.objects.all().order_by("display_order", "id")
+
+        if not self.instance.pk and "result" not in (self.data or {}):
+            self.initial.setdefault("result", self.RESULT_PASS)
+
+    def clean_vin(self):
+        vin = (self.cleaned_data.get("vin") or "").strip().upper()
+        if len(vin) < 8:
+            raise ValidationError("Enter a valid VIN (at least 8 characters).")
+        if len(vin) > 17:
+            raise ValidationError("VIN cannot exceed 17 characters.")
+        return vin
+
+    def clean(self):
+        super().clean()
+        order_ref = (self.cleaned_data.get("order_ref") or "").strip()
+        result = self.cleaned_data.get("result")
+
+        if result == self.RESULT_PASS:
+            self.cleaned_data["passed"] = True
+        elif result == self.RESULT_FAIL:
+            self.cleaned_data["passed"] = False
+        else:
+            raise ValidationError({"result": "Choose pass or fail."})
+
+        qs = daily_sales_queryset_for_claim_user(self._user)
+        if order_ref:
+            sale, err = resolve_daily_sale_from_ref(order_ref, qs)
+            if err:
+                raise ValidationError({"order_ref": err})
+            self.cleaned_data["daily_sale"] = sale
+            self.cleaned_data["dealership"] = sale.dealership
+            self.cleaned_data["product"] = sale.product
+        else:
+            self.cleaned_data["daily_sale"] = None
+            if not self.cleaned_data.get("dealership") or not self.cleaned_data.get("product"):
+                raise ValidationError(
+                    "Select a dealership and product, or enter an order number to link a recorded sale."
+                )
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.daily_sale = self.cleaned_data.get("daily_sale")
+        obj.passed = self.cleaned_data["passed"]
+        if commit:
+            obj.save()
+        return obj
