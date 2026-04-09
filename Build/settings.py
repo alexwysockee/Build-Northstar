@@ -67,6 +67,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'Profile.middleware.RequireLoginMiddleware',
+    'Build.middleware.SiteScopeMiddleware',
 ]
 
 # Allow embedding same-site PDFs in iframes (e.g., report entry attachments)

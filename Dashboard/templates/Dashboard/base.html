@@ -23,7 +23,7 @@
 <!-- Bootstrap Navbar: single container-fluid so bg-primary spans full width; profile sits in collapse end -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container-fluid">
-        <a class="navbar-brand d-flex align-items-center" href="{% url 'Dashboard:home' %}">
+        <a class="navbar-brand d-flex align-items-center" href="{% url ns_site_namespace|add:':home' %}">
             <img src="{% static 'images/logo.png' %}" alt="C3" height="36" style="max-height: 36px;">
         </a>
         {% if user.is_authenticated %}
@@ -33,22 +33,22 @@
         <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'Dashboard:index' %}">Dashboard</a>
+                    <a class="nav-link" href="{% url ns_site_namespace|add:':index' %}">Dashboard</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'Dashboard:inventory' %}">Inventory</a>
+                    <a class="nav-link" href="{% url ns_site_namespace|add:':inventory' %}">Inventory</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'Dashboard:sales' %}">Sales</a>
+                    <a class="nav-link" href="{% url ns_site_namespace|add:':sales' %}">Sales</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'Dashboard:Reports' %}">Reports</a>
+                    <a class="nav-link" href="{% url ns_site_namespace|add:':Reports' %}">Reports</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'Dashboard:claims' %}">Claims</a>
+                    <a class="nav-link" href="{% url ns_site_namespace|add:':claims' %}">Claims</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'Dashboard:inspections' %}">Inspections</a>
+                    <a class="nav-link" href="{% url ns_site_namespace|add:':inspections' %}">Inspections</a>
                 </li>
                 {% if can_see_users %}
                 <li class="nav-item">
@@ -57,6 +57,14 @@
                 {% endif %}
             </ul>
             <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                <li class="nav-item d-flex align-items-center me-2">
+                    {% if ns_site_mode == "management" %}
+                        <span class="badge bg-light text-primary me-2">{{ ns_site_label }}</span>
+                    {% endif %}
+                    {% if ns_dealership_label %}
+                        <span class="badge bg-dark">{{ ns_dealership_label }}</span>
+                    {% endif %}
+                </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         {% if profile_avatar_url %}

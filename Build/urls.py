@@ -25,6 +25,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("Profile.urls")),
     path("home/", include("Dashboard.urls")),
+    path("mgmt/", include("Dashboard.mgmt_urls")),
     path("Reports/", lambda r: redirect("/home/reports/", permanent=False)),
     path("reports/", lambda r: redirect("/home/reports/", permanent=False)),
 ]

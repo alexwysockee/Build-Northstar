@@ -65,9 +65,20 @@ def index(request):
     sales_products = list(SalesProduct.objects.all())
 
     now = timezone.now()
+    can_view_all = bool(getattr(request, "ns_can_view_all_dealerships", False))
+    home_dealership = getattr(request, "ns_dealership", None)
+    if not can_view_all and not home_dealership:
+        return HttpResponseForbidden("No dealership is assigned to your user.")
+
+    dealership_count = Dealership.objects.count() if can_view_all else 1
+
+    daily_sales_scope = DailySale.objects.filter(date__year=now.year, date__month=now.month)
+    if not can_view_all and home_dealership:
+        daily_sales_scope = daily_sales_scope.filter(dealership=home_dealership)
+
     sales_by_product_id = {
         row["product_id"]: (row["total"] or 0)
-        for row in DailySale.objects.filter(date__year=now.year, date__month=now.month)
+        for row in daily_sales_scope
         .values("product_id")
         .annotate(total=Sum("amount"))
     }
@@ -78,7 +89,8 @@ def index(request):
 
     for p in sales_products:
         sales_this_month = int(sales_by_product_id.get(p.id, 0) or 0)
-        goal_pct = round((sales_this_month / p.goal) * 100) if p.goal else None
+        goal_units = int(p.goal or 0) * int(dealership_count or 1)
+        goal_pct = round((sales_this_month / goal_units) * 100) if goal_units else None
 
         dashboard_rows.append(
             {
@@ -88,10 +100,12 @@ def index(request):
             }
         )
 
-        # Revenue progress is company-wide actual revenue vs revenue goal.
+        # Revenue progress uses the current scope:
+        # - dealership portal: goal is per-dealership
+        # - management portal: goal is company-wide (sum of dealership goals)
         # Do NOT cap achieved revenue at the unit goal; if you exceed goal, % should exceed 100%.
         price = p.price or Decimal("0")
-        revenue_goal += Decimal(p.goal) * price
+        revenue_goal += Decimal(int(p.goal or 0) * int(dealership_count or 1)) * price
         revenue_achieved += Decimal(sales_this_month) * price
 
     if revenue_goal > 0:
@@ -112,7 +126,10 @@ def index(request):
         physical_products = list(
             SalesProduct.objects.filter(tracks_inventory=True).order_by("display_order", "id")
         )
-        dealerships = list(Dealership.objects.order_by("name"))
+        if can_view_all:
+            dealerships = list(Dealership.objects.order_by("name"))
+        else:
+            dealerships = [home_dealership] if home_dealership else []
 
         if physical_products and dealerships:
             import base64
@@ -169,6 +186,7 @@ def index(request):
         "revenue_goal": f"{revenue_goal.quantize(Decimal('0.01'))}",
         "revenue_achieved": f"{revenue_achieved.quantize(Decimal('0.01'))}",
         "inventory_totals_png_b64": inventory_totals_png_b64,
+        "revenue_scope_label": "Company Wide" if can_view_all else (home_dealership.name if home_dealership else "Dealership"),
     }
     return render(request, "Dashboard/index.html", context)
 
@@ -186,13 +204,42 @@ def sales(request):
     """Sales tab with editable C3 Product Performance table (sales this month)."""
     products = SalesProduct.objects.all()
     now = timezone.now()
-    daily_sales_this_month = DailySale.objects.filter(
+    can_view_all = bool(getattr(request, "ns_can_view_all_dealerships", False))
+    home_dealership = getattr(request, "ns_dealership", None)
+    if not can_view_all and not home_dealership:
+        return HttpResponseForbidden("No dealership is assigned to your user.")
+
+    dealership_count = Dealership.objects.count() if can_view_all else 1
+
+    daily_sales_qs = DailySale.objects.filter(
         date__year=now.year,
         date__month=now.month,
     ).select_related("product", "dealership").order_by("-date", "-id")
+
+    if not can_view_all and home_dealership:
+        daily_sales_qs = daily_sales_qs.filter(dealership=home_dealership)
+
+    sales_totals = {
+        row["product_id"]: int(row["total"] or 0)
+        for row in daily_sales_qs.values("product_id").annotate(total=Sum("amount"))
+    }
+
+    product_rows = []
+    for p in products:
+        sales_this_month = int(sales_totals.get(p.id, 0) or 0)
+        goal_units = int(p.goal or 0) * int(dealership_count or 1)
+        goal_pct = round((sales_this_month / goal_units) * 100) if goal_units else None
+        product_rows.append(
+            {
+                "product": p,
+                "sales_this_month": sales_this_month,
+                "goal_pct": goal_pct,
+            }
+        )
+
     context = {
-        "sales_products": products,
-        "daily_sales_this_month": daily_sales_this_month,
+        "product_rows": product_rows,
+        "daily_sales_this_month": daily_sales_qs,
         "add_form": SalesProductForm(),
         "add_daily_form": DailySaleForm(user=request.user),
     }

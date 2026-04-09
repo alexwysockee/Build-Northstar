@@ -4,5 +4,5 @@
 {% block content %}
 <h1 class="mb-3">{{ product_name }}</h1>
 <p>Product {{ product_id }} detail page.</p>
-<p><a href="{% url 'Dashboard:index' %}">Back to Dashboard</a></p>
+<p><a href="{% url ns_site_namespace|add:':index' %}">Back to Dashboard</a></p>
 {% endblock content %}

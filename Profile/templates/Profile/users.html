@@ -22,7 +22,7 @@
     </tr>
   </thead>
   <tbody>
-    {% for u, last_login_class, avatar_url, dealership_id, dealership_badge_variant in users_with_login %}
+    {% for u, last_login_class, avatar_url, dealership_id, dealership_badge_variant, is_management in users_with_login %}
     <tr>
       <td scope="row" class="text-nowrap">
         {% if avatar_url %}
@@ -34,6 +34,9 @@
       </td>
       <td>{{ u.email|default:"—" }}</td>
       <td>
+        {% if is_management %}
+          <span class="badge bg-light text-primary me-1" title="Management">M</span>
+        {% endif %}
         {% if dealership_id %}
           <span class="badge bg-{{ dealership_badge_variant }}{% if dealership_badge_variant == 'warning' %} text-dark{% endif %}">{{ dealership_id }}</span>
         {% else %}

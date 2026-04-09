@@ -4,16 +4,16 @@
 {% block content %}
 <nav aria-label="breadcrumb" class="mb-2">
 	<ol class="breadcrumb">
-		<li class="breadcrumb-item"><a href="{% url 'Dashboard:Reports' %}">Reports</a></li>
-		<li class="breadcrumb-item"><a href="{% url 'Dashboard:report' report.id %}">{{ report.text }}</a></li>
+		<li class="breadcrumb-item"><a href="{% url ns_site_namespace|add:':Reports' %}">Reports</a></li>
+		<li class="breadcrumb-item"><a href="{% url ns_site_namespace|add:':report' report.id %}">{{ report.text }}</a></li>
 		<li class="breadcrumb-item active" aria-current="page">Edit entry</li>
 	</ol>
 </nav>
 
 <h1 class="mb-3">Edit entry</h1>
-<p class="text-muted">Report: <a href="{% url 'Dashboard:report' report.id %}">{{ report.text }}</a></p>
+<p class="text-muted">Report: <a href="{% url ns_site_namespace|add:':report' report.id %}">{{ report.text }}</a></p>
 
-<form action="{% url 'Dashboard:edit_entry' entry.id %}" method="post" enctype="multipart/form-data">
+<form action="{% url ns_site_namespace|add:':edit_entry' entry.id %}" method="post" enctype="multipart/form-data">
 	{% csrf_token %}
 	<div class="mb-3">
 		<label for="id_text" class="form-label">{{ form.text.label }}</label>
@@ -31,9 +31,9 @@
 		<ul class="mb-0">
 			{% for doc in entry.documents.all %}
 			<li class="text-nowrap">
-				<a href="{% url 'Dashboard:entry_document_inline' doc.id %}" target="_blank" rel="noopener">View PDF</a>
+				<a href="{% url ns_site_namespace|add:':entry_document_inline' doc.id %}" target="_blank" rel="noopener">View PDF</a>
 				{% if can_delete_reports %}
-					<form method="post" action="{% url 'Dashboard:delete_entry_document' doc.id %}" class="d-inline" onsubmit="return confirm('Delete this PDF?');">
+					<form method="post" action="{% url ns_site_namespace|add:':delete_entry_document' doc.id %}" class="d-inline" onsubmit="return confirm('Delete this PDF?');">
 						{% csrf_token %}
 						<button type="submit" class="btn btn-sm btn-outline-danger ms-2">Delete</button>
 					</form>
@@ -44,7 +44,7 @@
 	</div>
 	{% endif %}
 	<button type="submit" class="btn btn-primary">Save changes</button>
-	<a href="{% url 'Dashboard:report' report.id %}" class="btn btn-outline-secondary">Cancel</a>
+	<a href="{% url ns_site_namespace|add:':report' report.id %}" class="btn btn-outline-secondary">Cancel</a>
 </form>
 {% endblock content %}
 

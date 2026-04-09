@@ -4,5 +4,5 @@
 {% block content %}
 <h1 class="mb-3">Welcome{% if user.is_authenticated %}, {{ user.username }}{% endif %}.</h1>
 <p>To the C3 Digital Transformation System.</p>
-<p><a href="{% url 'Dashboard:index' %}" class="btn btn-primary">Go to Dashboard</a></p>
+<p><a href="{% url ns_site_namespace|add:':index' %}" class="btn btn-primary">Go to Dashboard</a></p>
 {% endblock content %}

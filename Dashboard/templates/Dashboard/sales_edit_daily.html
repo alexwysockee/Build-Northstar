@@ -25,6 +25,6 @@
 	</div>
 	{% if form.errors %}<div class="text-danger small mb-2">{{ form.errors }}</div>{% endif %}
 	<button type="submit" class="btn btn-primary">Save</button>
-	<a href="{% url 'Dashboard:sales' %}" class="btn btn-outline-secondary">Cancel</a>
+	<a href="{% url ns_site_namespace|add:':sales' %}" class="btn btn-outline-secondary">Cancel</a>
 </form>
 {% endblock content %}

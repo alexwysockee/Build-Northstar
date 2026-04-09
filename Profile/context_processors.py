@@ -1,8 +1,11 @@
 def profile_context(request):
-    """Add can_see_users, can_modify_daily_sales, and profile avatar for templates."""
+    """Add navbar permissions, identity, and site/dealership scope."""
     can_see_users = False
     can_modify_daily_sales = False
     profile_avatar_url = None
+    site_mode = getattr(request, "ns_site_mode", "dealership")
+    site_namespace = getattr(request, "ns_site_namespace", "Dashboard")
+    dealership = getattr(request, "ns_dealership", None)
     if request.user.is_authenticated:
         can_see_users = request.user.is_staff or request.user.groups.filter(
             name__in=["Management", "Back Office"]
@@ -26,4 +29,9 @@ def profile_context(request):
         "can_see_users": can_see_users,
         "can_modify_daily_sales": can_modify_daily_sales,
         "profile_avatar_url": profile_avatar_url,
+        "ns_site_mode": site_mode,
+        "ns_site_namespace": site_namespace,
+        "ns_site_label": "C3 for Management" if site_mode == "management" else "C3",
+        "ns_dealership": dealership,
+        "ns_dealership_label": (dealership.name if dealership else None),
     }

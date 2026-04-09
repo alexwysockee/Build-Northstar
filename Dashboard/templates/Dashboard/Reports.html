@@ -15,14 +15,14 @@
 	<tbody>
 		{% for report in Reports %}
 		<tr>
-			<td scope="row"><a href="{% url 'Dashboard:report' report.id %}">{{ report.text }}</a></td>
+			<td scope="row"><a href="{% url ns_site_namespace|add:':report' report.id %}">{{ report.text }}</a></td>
 			<td>{{ report.date_added|date:"Y-m-d H:i" }}</td>
-			<td><a href="{% url 'Dashboard:report' report.id %}" class="btn btn-sm btn-outline-primary">View</a></td>
+			<td><a href="{% url ns_site_namespace|add:':report' report.id %}" class="btn btn-sm btn-outline-primary">View</a></td>
 		</tr>
 		{% empty %}
 		<tr><td colspan="3" class="text-muted">No reports yet.</td></tr>
 		{% endfor %}
 	</tbody>
 </table>
-<p><a href="{% url 'Dashboard:new_report' %}" class="btn btn-primary">Add a new report</a></p>
+<p><a href="{% url ns_site_namespace|add:':new_report' %}" class="btn btn-primary">Add a new report</a></p>
 {% endblock content %}

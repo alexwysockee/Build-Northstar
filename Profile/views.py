@@ -58,6 +58,7 @@ def user_list(request):
             avatar_by_user_id.get(u.id),
             getattr(profile_by_user_id.get(u.id), "dealership_id", None),
             _dealership_badge_variant(getattr(profile_by_user_id.get(u.id), "dealership_id", None)),
+            bool(u.is_staff or u.groups.filter(name="Management").exists()),
         )
         for u in users
     ]

@@ -18,27 +18,27 @@
 	</tr>
 	</thead>
 	<tbody>
-	{% for p in sales_products %}
-	<tr data-sales-this-month="{{ p.sales_this_month }}">
-		<td scope="row">{{ p.name }}</td>
+{% for row in product_rows %}
+<tr data-sales-this-month="{{ row.sales_this_month }}">
+	<td scope="row">{{ row.product.name }}</td>
 		<td>
-			<input type="number" name="price" class="form-control form-control-sm editable-num" data-field="price" value="{{ p.price }}" min="0" step="0.01" style="width:5rem;" form="update-form-{{ p.pk }}">
+		<input type="number" name="price" class="form-control form-control-sm editable-num" data-field="price" value="{{ row.product.price }}" min="0" step="0.01" style="width:5rem;" form="update-form-{{ row.product.pk }}">
 		</td>
-		<td>{{ p.sales_this_month }}</td>
+	<td>{{ row.sales_this_month }}</td>
 		<td>
-			<input type="number" name="goal" class="form-control form-control-sm editable-num" data-field="goal" value="{{ p.goal }}" min="1" style="width:4rem;" form="update-form-{{ p.pk }}">
+		<input type="number" name="goal" class="form-control form-control-sm editable-num" data-field="goal" value="{{ row.product.goal }}" min="1" style="width:4rem;" form="update-form-{{ row.product.pk }}">
 		</td>
 		<td>
-			<span class="badge goal-badge" title="{{ p.sales_this_month }}/{{ p.goal }}">
-				{% if p.goal_pct is not None %}{{ p.goal_pct }}%{% else %}—{% endif %}
+		<span class="badge goal-badge" title="{{ row.sales_this_month }}/{{ row.product.goal }}">
+			{% if row.goal_pct is not None %}{{ row.goal_pct }}%{% else %}—{% endif %}
 			</span>
 		</td>
 		<td class="text-nowrap">
-			<form id="update-form-{{ p.pk }}" method="post" action="{% url 'Dashboard:sales_update_product' p.pk %}" class="d-inline">
+		<form id="update-form-{{ row.product.pk }}" method="post" action="{% url ns_site_namespace|add:':sales_update_product' row.product.pk %}" class="d-inline">
 				{% csrf_token %}
 				<button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
 			</form>
-			<form method="post" action="{% url 'Dashboard:sales_delete_product' p.pk %}" class="d-inline" onsubmit="return confirm('Remove this product from the table?');">
+		<form method="post" action="{% url ns_site_namespace|add:':sales_delete_product' row.product.pk %}" class="d-inline" onsubmit="return confirm('Remove this product from the table?');">
 				{% csrf_token %}
 				<button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
 			</form>
@@ -75,8 +75,8 @@
 				<td>{{ d.amount }}</td>
 				{% if can_modify_daily_sales %}
 				<td class="text-nowrap">
-					<a href="{% url 'Dashboard:sales_edit_daily' d.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
-					<form method="post" action="{% url 'Dashboard:sales_delete_daily' d.pk %}" class="d-inline" onsubmit="return confirm('Delete this daily sale?');">
+					<a href="{% url ns_site_namespace|add:':sales_edit_daily' d.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+					<form method="post" action="{% url ns_site_namespace|add:':sales_delete_daily' d.pk %}" class="d-inline" onsubmit="return confirm('Delete this daily sale?');">
 						{% csrf_token %}
 						<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
 					</form>
@@ -91,7 +91,7 @@
 	{% endif %}
 	{% if can_modify_daily_sales %}
 	<h3 class="h6 mt-3 mb-2">Add daily sale</h3>
-	<form method="post" action="{% url 'Dashboard:sales_add_daily' %}" class="row g-2 align-items-end">
+	<form method="post" action="{% url ns_site_namespace|add:':sales_add_daily' %}" class="row g-2 align-items-end">
 		{% csrf_token %}
 		<div class="col-auto">
 			<label for="id_product" class="form-label">Product</label>
@@ -123,7 +123,7 @@
 
 <div class="mt-4">
 	<h2 class="h5 mb-2">Add product</h2>
-	<form method="post" action="{% url 'Dashboard:sales_add_product' %}" class="row g-2 align-items-end">
+	<form method="post" action="{% url ns_site_namespace|add:':sales_add_product' %}" class="row g-2 align-items-end">
 		{% csrf_token %}
 		<div class="col-auto">
 			<label for="id_name" class="form-label visually-hidden">Product name</label>

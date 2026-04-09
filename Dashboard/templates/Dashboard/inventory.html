@@ -72,7 +72,7 @@
 			Submit a replenishment request. New orders start as <strong>Pending</strong>.
 			Managers mark them <strong>Delivered</strong> when stock arrives.
 		</p>
-		<form method="post" action="{% url 'Dashboard:inventory_order_submit' %}">
+		<form method="post" action="{% url ns_site_namespace|add:':inventory_order_submit' %}">
 			{% csrf_token %}
 			<div class="row g-3 align-items-end">
 				<div class="col-md-4">
@@ -139,7 +139,7 @@
 						{% if can_manage_inventory_orders %}
 							<td class="text-nowrap">
 								{% if o.status == 'pending' %}
-									<form method="post" action="{% url 'Dashboard:inventory_order_deliver' o.pk %}" class="d-inline" onsubmit="return confirm('Mark order {{ o.display_order_id }} delivered?');">
+									<form method="post" action="{% url ns_site_namespace|add:':inventory_order_deliver' o.pk %}" class="d-inline" onsubmit="return confirm('Mark order {{ o.display_order_id }} delivered?');">
 										{% csrf_token %}
 										<button type="submit" class="btn btn-sm btn-outline-primary">Delivered</button>
 									</form>

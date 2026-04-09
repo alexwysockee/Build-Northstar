@@ -4,15 +4,15 @@
 {% block content %}
 <nav aria-label="breadcrumb" class="mb-2">
 	<ol class="breadcrumb">
-		<li class="breadcrumb-item"><a href="{% url 'Dashboard:Reports' %}">Reports</a></li>
+		<li class="breadcrumb-item"><a href="{% url ns_site_namespace|add:':Reports' %}">Reports</a></li>
 		<li class="breadcrumb-item active" aria-current="page">{{ report.text }}</li>
 	</ol>
 </nav>
 <h1 class="mb-3">{{ report.text }}</h1>
 <div class="d-flex gap-2 align-items-center mb-3">
-	<a href="{% url 'Dashboard:new_entry' report.id %}" class="btn btn-primary">Add new entry</a>
+	<a href="{% url ns_site_namespace|add:':new_entry' report.id %}" class="btn btn-primary">Add new entry</a>
 	{% if can_delete_reports %}
-	<form method="post" action="{% url 'Dashboard:delete_report' report.id %}" class="d-inline ms-auto" onsubmit="return confirm('Delete this entire report (and all entries/PDFs)?');">
+	<form method="post" action="{% url ns_site_namespace|add:':delete_report' report.id %}" class="d-inline ms-auto" onsubmit="return confirm('Delete this entire report (and all entries/PDFs)?');">
 		{% csrf_token %}
 		<button type="submit" class="btn btn-outline-danger">Delete report</button>
 	</form>
@@ -37,9 +37,9 @@
 					{% for doc in entry.documents.all %}
 						<div class="mb-3">
 							<div class="mb-1">
-								<a href="{% url 'Dashboard:entry_document_inline' doc.id %}" target="_blank" rel="noopener">Open PDF</a>
+								<a href="{% url ns_site_namespace|add:':entry_document_inline' doc.id %}" target="_blank" rel="noopener">Open PDF</a>
 							</div>
-							<object data="{% url 'Dashboard:entry_document_inline' doc.id %}" type="application/pdf" width="100%" height="520" style="border:1px solid #dee2e6;border-radius:6px;background:#fff;">
+							<object data="{% url ns_site_namespace|add:':entry_document_inline' doc.id %}" type="application/pdf" width="100%" height="520" style="border:1px solid #dee2e6;border-radius:6px;background:#fff;">
 								<small class="text-muted">Preview not available. Use “Open PDF”.</small>
 							</object>
 						</div>
@@ -47,9 +47,9 @@
 				{% endif %}
 			</td>
 			<td class="text-nowrap">
-				<a href="{% url 'Dashboard:edit_entry' entry.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+				<a href="{% url ns_site_namespace|add:':edit_entry' entry.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
 				{% if can_delete_reports %}
-					<form method="post" action="{% url 'Dashboard:delete_entry' entry.id %}" class="d-inline" onsubmit="return confirm('Delete this entry (and any attached PDFs)?');">
+					<form method="post" action="{% url ns_site_namespace|add:':delete_entry' entry.id %}" class="d-inline" onsubmit="return confirm('Delete this entry (and any attached PDFs)?');">
 						{% csrf_token %}
 						<button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
 					</form>

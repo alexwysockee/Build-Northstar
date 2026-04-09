@@ -1,6 +1,9 @@
 from django import forms
 from django.contrib.auth.models import User, Group
 
+from Dashboard.models import Dealership
+from .models import UserProfile
+
 
 class UserAddForm(forms.Form):
     """Form to add a new user (staff/Management/Back Office only)."""
@@ -36,15 +39,27 @@ class UserGroupsForm(forms.Form):
         widget=forms.CheckboxSelectMultiple,
         required=False,
     )
+    dealership = forms.ModelChoiceField(
+        queryset=Dealership.objects.all().order_by("name"),
+        required=False,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        help_text="Optional. If set, this user will be scoped to that dealership for dealership-only pages.",
+    )
 
     def __init__(self, user=None, *args, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
         if user and not args and "data" not in kwargs:
             self.initial["groups"] = list(user.groups.values_list("pk", flat=True))
+            prof = UserProfile.objects.filter(user=user).select_related("dealership").first()
+            if prof and prof.dealership_id:
+                self.initial["dealership"] = prof.dealership_id
 
     def save(self):
         self.user.groups.set(self.cleaned_data["groups"])
+        prof, _ = UserProfile.objects.get_or_create(user=self.user)
+        prof.dealership = self.cleaned_data.get("dealership")
+        prof.save(update_fields=["dealership", "updated_at"])
 
 
 class ProfilePictureForm(forms.Form):
