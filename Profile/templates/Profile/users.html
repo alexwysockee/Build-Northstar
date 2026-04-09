@@ -55,8 +55,8 @@
     </tr>
     {% if can_modify_user_groups and can_manage_user %}
     <tr>
-      <td colspan="8" class="pb-3 pt-0 ps-3 bg-light border-bottom">
-        <div class="d-flex flex-row flex-wrap align-items-center gap-2">
+      <td colspan="8" class="py-3 px-3 bg-light border-bottom">
+        <div class="d-flex flex-row flex-wrap align-items-center justify-content-center gap-2">
           <a href="{% url 'Profile:user_edit_groups' u.id %}" class="btn btn-sm btn-outline-primary">Edit groups &amp; dealership</a>
           {% if not u.is_superuser and u.username|lower != "admin" %}
           <a href="{% url 'Profile:user_set_password' u.id %}" class="btn btn-sm btn-outline-secondary">Set password</a>
