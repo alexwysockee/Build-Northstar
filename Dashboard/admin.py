@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 
-from .models import Report, Entry, SalesProduct, DailySale, EntryDocument
+from .models import Dealership, Report, Entry, SalesProduct, DailySale, EntryDocument
 
 #test
 # Custom User admin so Groups are easy to assign in the admin
@@ -18,3 +18,10 @@ admin.site.register(Entry)
 admin.site.register(EntryDocument)
 admin.site.register(SalesProduct)
 admin.site.register(DailySale)
+
+
+@admin.register(Dealership)
+class DealershipAdmin(admin.ModelAdmin):
+    list_display = ("name", "badge_css_class", "is_default_home")
+    list_filter = ("is_default_home",)
+    search_fields = ("name",)

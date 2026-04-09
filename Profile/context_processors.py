@@ -6,6 +6,9 @@ def profile_context(request):
     site_mode = getattr(request, "ns_site_mode", "dealership")
     site_namespace = getattr(request, "ns_site_namespace", "Dashboard")
     dealership = getattr(request, "ns_dealership", None)
+    ns_dealership_badge_class = None
+    if dealership:
+        ns_dealership_badge_class = dealership.resolved_badge_css_class()
     if request.user.is_authenticated:
         can_see_users = request.user.is_staff or request.user.groups.filter(
             name__in=["Management", "Back Office"]
@@ -34,4 +37,5 @@ def profile_context(request):
         "ns_site_label": "C3 for Management" if site_mode == "management" else "C3",
         "ns_dealership": dealership,
         "ns_dealership_label": (dealership.name if dealership else None),
+        "ns_dealership_badge_class": ns_dealership_badge_class,
     }

@@ -11,6 +11,7 @@ from .forms import ReportForm, EntryForm, SalesProductForm, DailySaleForm
 from .forms import InventoryRequestForm
 from .inventory_services import (
     apply_sale_delta,
+    cancel_inventory_order,
     fulfill_inventory_order,
     get_or_create_inventory_row,
     quantity_on_hand,
@@ -46,6 +47,18 @@ def _is_management(user):
     return user.groups.filter(name="Management").exists()
 
 
+def _sales_month_today():
+    """Calendar year/month in the active TIME_ZONE (matches typical date-picker 'today')."""
+    d = timezone.localdate()
+    return d.year, d.month
+
+
+def _redirect_sales(request):
+    """Return to Sales on the same site (/home vs /mgmt) the request came from."""
+    ns = getattr(request, "ns_site_namespace", None) or "Dashboard"
+    return redirect(f"{ns}:sales")
+
+
 # Product names for product detail pages (product 1-4)
 PRODUCTS = {
     1: "Rust Protection",
@@ -64,7 +77,7 @@ def index(request):
     """The Dashboard for C3."""
     sales_products = list(SalesProduct.objects.all())
 
-    now = timezone.now()
+    y, m = _sales_month_today()
     can_view_all = bool(getattr(request, "ns_can_view_all_dealerships", False))
     home_dealership = getattr(request, "ns_dealership", None)
     if not can_view_all and not home_dealership:
@@ -72,7 +85,7 @@ def index(request):
 
     dealership_count = Dealership.objects.count() if can_view_all else 1
 
-    daily_sales_scope = DailySale.objects.filter(date__year=now.year, date__month=now.month)
+    daily_sales_scope = DailySale.objects.filter(date__year=y, date__month=m)
     if not can_view_all and home_dealership:
         daily_sales_scope = daily_sales_scope.filter(dealership=home_dealership)
 
@@ -150,7 +163,15 @@ def index(request):
             for i, deal in enumerate(dealerships):
                 quantities = [quantity_on_hand(p, deal) for p in physical_products]
                 offset = (i - (len(dealerships) - 1) / 2) * width
-                ax.bar(x + offset, quantities, width=width, label=deal.name)
+                ax.bar(
+                    x + offset,
+                    quantities,
+                    width=width,
+                    label=deal.name,
+                    color=deal.chart_color_hex(),
+                    edgecolor="white",
+                    linewidth=0.6,
+                )
 
             ax.set_title("Inventory by product (per dealership)", fontsize=18, fontweight="bold")
             ax.set_ylabel("Units", fontsize=14, fontweight="bold")
@@ -203,7 +224,7 @@ def product(request, product_id):
 def sales(request):
     """Sales tab with editable C3 Product Performance table (sales this month)."""
     products = SalesProduct.objects.all()
-    now = timezone.now()
+    y, m = _sales_month_today()
     can_view_all = bool(getattr(request, "ns_can_view_all_dealerships", False))
     home_dealership = getattr(request, "ns_dealership", None)
     if not can_view_all and not home_dealership:
@@ -212,9 +233,9 @@ def sales(request):
     dealership_count = Dealership.objects.count() if can_view_all else 1
 
     daily_sales_qs = DailySale.objects.filter(
-        date__year=now.year,
-        date__month=now.month,
-    ).select_related("product", "dealership").order_by("-date", "-id")
+        date__year=y,
+        date__month=m,
+    ).select_related("product", "dealership", "entered_by").order_by("-date", "-id")
 
     if not can_view_all and home_dealership:
         daily_sales_qs = daily_sales_qs.filter(dealership=home_dealership)
@@ -254,25 +275,57 @@ def sales_add_product(request):
         obj = form.save(commit=False)
         obj.display_order = SalesProduct.objects.count()
         obj.save()
-    return redirect("Dashboard:sales")
+    else:
+        _messages_for_invalid_form(request, form, context_note="Product was not added:")
+    return _redirect_sales(request)
+
+
+def _messages_for_invalid_form(request, form, *, context_note=None):
+    """Flash each validation error; always emit at least one message when the form is invalid."""
+    prefix = f"{context_note} " if context_note else ""
+    added = False
+    for msg in form.non_field_errors():
+        messages.error(request, f"{prefix}{msg}")
+        added = True
+    for field_name, errs in form.errors.items():
+        if field_name == "__all__":
+            continue
+        fld = form.fields.get(field_name)
+        label = fld.label if fld else field_name.replace("_", " ").title()
+        for err in errs:
+            messages.error(request, f"{prefix}{label}: {err}")
+            added = True
+    if not added:
+        messages.error(
+            request,
+            f"{prefix}This was not saved. Please check all fields and try again."
+            if prefix
+            else "This was not saved. Please check all fields and try again.",
+        )
 
 
 @require_POST
 def sales_add_daily(request):
     """Add a daily sale. Allowed only for admin, Sales Rep, Dealership User."""
     if not _can_modify_daily_sales(request.user):
-        return HttpResponseForbidden("You don't have permission to add daily sales.")
+        messages.error(request, "Daily sale was not added: you don't have permission to add daily sales.")
+        return _redirect_sales(request)
     form = DailySaleForm(request.POST, user=request.user)
     if form.is_valid():
-        obj = form.save()
+        obj = form.save(commit=False)
+        obj.entered_by = request.user
+        obj.save()
         apply_sale_delta(obj.product, obj.dealership, int(obj.amount))
-    return redirect("Dashboard:sales")
+    else:
+        _messages_for_invalid_form(request, form, context_note="Daily sale was not added:")
+    return _redirect_sales(request)
 
 
 def sales_edit_daily(request, daily_pk):
     """Edit a daily sale. Allowed only for admin, Sales Rep, Dealership User."""
     if not _can_modify_daily_sales(request.user):
-        return HttpResponseForbidden("You don't have permission to edit daily sales.")
+        messages.error(request, "Daily sale was not updated: you don't have permission to edit daily sales.")
+        return _redirect_sales(request)
     obj = get_object_or_404(DailySale, pk=daily_pk)
     if request.method == "POST":
         old_product = obj.product
@@ -291,7 +344,8 @@ def sales_edit_daily(request, daily_pk):
                     saved.dealership,
                     int(saved.amount) - old_amount,
                 )
-            return redirect("Dashboard:sales")
+            return _redirect_sales(request)
+        _messages_for_invalid_form(request, form, context_note="Daily sale was not updated:")
     else:
         form = DailySaleForm(instance=obj, user=request.user)
     context = {"form": form, "daily_sale": obj}
@@ -302,11 +356,12 @@ def sales_edit_daily(request, daily_pk):
 def sales_delete_daily(request, daily_pk):
     """Delete a daily sale. Allowed only for admin, Sales Rep, Dealership User."""
     if not _can_modify_daily_sales(request.user):
-        return HttpResponseForbidden("You don't have permission to delete daily sales.")
+        messages.error(request, "Daily sale was not deleted: you don't have permission.")
+        return _redirect_sales(request)
     obj = get_object_or_404(DailySale, pk=daily_pk)
     apply_sale_delta(obj.product, obj.dealership, -int(obj.amount))
     obj.delete()
-    return redirect("Dashboard:sales")
+    return _redirect_sales(request)
 
 
 @require_POST
@@ -314,14 +369,21 @@ def sales_delete_product(request, product_pk):
     """Remove a product row from the sales table."""
     obj = get_object_or_404(SalesProduct, pk=product_pk)
     obj.delete()
-    return redirect("Dashboard:sales")
+    return _redirect_sales(request)
 
 
 @require_POST
 def sales_update_product(request, product_pk):
     """Update goal and price for a sales product."""
     obj = get_object_or_404(SalesProduct, pk=product_pk)
-    goal = int(request.POST.get("goal", 1) or 1)
+    try:
+        goal = int(request.POST.get("goal", 1) or 1)
+    except (TypeError, ValueError):
+        messages.error(
+            request,
+            f'Product "{obj.name}": goal was not updated; enter a whole number. Other fields were not changed.',
+        )
+        return _redirect_sales(request)
     obj.goal = max(1, goal)
     try:
         price = Decimal(str(request.POST.get("price", 0) or 0))
@@ -329,9 +391,12 @@ def sales_update_product(request, product_pk):
             price = Decimal("0")
         obj.price = price
     except (InvalidOperation, ValueError, TypeError):
-        pass
+        messages.error(
+            request,
+            f'Product "{obj.name}": price was not updated; enter a valid number. Goal was still saved.',
+        )
     obj.save()
-    return redirect("Dashboard:sales")
+    return _redirect_sales(request)
 
 
 def _can_view_all_inventory(user):
@@ -353,12 +418,29 @@ def _can_submit_inventory_order(user):
 
 
 def _can_manage_inventory_orders(user):
-    """Mark requests as delivered and increase on-hand counts."""
+    """Deliver, cancel, or adjust stock for orders (Management, Back Office, Sales Rep, Dealership User)."""
     if not user.is_authenticated:
         return False
     if user.is_staff:
         return True
-    return user.groups.filter(name__in=["Management", "Back Office"]).exists()
+    return user.groups.filter(
+        name__in=["Management", "Back Office", "Sales Rep", "Dealership User"]
+    ).exists()
+
+
+def _inventory_order_scope_denied_response(request, order):
+    """Sales Rep / Dealership User may only act on orders for their home dealership."""
+    if request.user.is_staff or request.user.groups.filter(
+        name__in=["Management", "Back Office"]
+    ).exists():
+        return None
+    if request.user.groups.filter(name__in=["Sales Rep", "Dealership User"]).exists():
+        home = user_home_dealership(request.user)
+        if not home or order.dealership_id != home.pk:
+            return HttpResponseForbidden(
+                "You can only manage inventory orders for your home dealership."
+            )
+    return None
 
 
 def inventory(request):
@@ -400,11 +482,21 @@ def inventory(request):
                     "badge_variant": badge_variant,
                 }
             )
-        dealership_sections.append({"dealership": deal, "rows": rows})
+        dealership_sections.append(
+            {
+                "dealership": deal,
+                "rows": rows,
+                "accent_color": deal.chart_color_hex(),
+            }
+        )
 
-    orders_qs = InventoryOrder.objects.select_related("product", "dealership", "requested_by").order_by(
-        "-date_requested"
-    )
+    orders_qs = InventoryOrder.objects.select_related(
+        "product",
+        "dealership",
+        "requested_by",
+        "delivered_by",
+        "cancelled_by",
+    ).order_by("-date_requested")
     if not can_view_all and home:
         orders_qs = orders_qs.filter(dealership=home)
 
@@ -447,19 +539,48 @@ def inventory_order_submit(request):
 
 @require_POST
 def inventory_order_deliver(request, order_pk):
-    """Manager/admin: mark order delivered and add quantity to on-hand inventory."""
+    """Mark order delivered and add quantity to on-hand inventory. Sales Rep / Dealership User only for their dealership."""
     if not _can_manage_inventory_orders(request.user):
         return HttpResponseForbidden("You don't have permission to mark orders as delivered.")
 
     order = get_object_or_404(InventoryOrder, pk=order_pk)
+
+    denied = _inventory_order_scope_denied_response(request, order)
+    if denied:
+        return denied
+
     if order.status != InventoryOrder.STATUS_PENDING:
         messages.warning(request, "That order is not pending.")
         return redirect("Dashboard:inventory")
 
-    fulfill_inventory_order(order)
+    fulfill_inventory_order(order, request.user)
     messages.success(
         request,
         f"Order #{order.display_order_id} marked delivered. Stock at {order.dealership.name} updated.",
+    )
+    return redirect("Dashboard:inventory")
+
+
+@require_POST
+def inventory_order_cancel(request, order_pk):
+    """Cancel a pending order (no stock change). Same role rules as deliver."""
+    if not _can_manage_inventory_orders(request.user):
+        return HttpResponseForbidden("You don't have permission to cancel inventory orders.")
+
+    order = get_object_or_404(InventoryOrder, pk=order_pk)
+
+    denied = _inventory_order_scope_denied_response(request, order)
+    if denied:
+        return denied
+
+    if order.status != InventoryOrder.STATUS_PENDING:
+        messages.warning(request, "That order is not pending.")
+        return redirect("Dashboard:inventory")
+
+    cancel_inventory_order(order, request.user)
+    messages.success(
+        request,
+        f"Order #{order.display_order_id} cancelled.",
     )
     return redirect("Dashboard:inventory")
 
@@ -496,7 +617,7 @@ def claims(request):
 
     # Dummy context (test stub) to keep the page usable until real models exist.
     dealerships = [
-        {"pk": 1, "name": "Default Dealership"},
+        {"pk": 1, "name": "C3 Mississauga"},
         {"pk": 2, "name": "Northside Motors"},
         {"pk": 3, "name": "Westside Auto"},
     ]
@@ -551,7 +672,7 @@ def inspections(request):
     ]
 
     dealerships = [
-        {"pk": 1, "name": "Default Dealership"},
+        {"pk": 1, "name": "C3 Mississauga"},
         {"pk": 2, "name": "Northside Motors"},
         {"pk": 3, "name": "Westside Auto"},
     ]

@@ -81,8 +81,8 @@ def apply_sale_delta(product, dealership, units_sold_delta: int):
         row.save(update_fields=["quantity", "last_updated"])
 
 
-def fulfill_inventory_order(order):
-    """Mark order delivered: increase stock and set date_received."""
+def fulfill_inventory_order(order, user):
+    """Mark order delivered: increase stock, set date_received and delivered_by."""
     from .models import InventoryOrder
 
     if not order or order.status != InventoryOrder.STATUS_PENDING:
@@ -95,5 +95,20 @@ def fulfill_inventory_order(order):
 
         order.status = InventoryOrder.STATUS_DELIVERED
         order.date_received = timezone.now()
-        order.save(update_fields=["status", "date_received"])
+        order.delivered_by = user if user and user.is_authenticated else None
+        order.save(update_fields=["status", "date_received", "delivered_by"])
+
+
+def cancel_inventory_order(order, user):
+    """Mark order cancelled: no stock change."""
+    from .models import InventoryOrder
+
+    if not order or order.status != InventoryOrder.STATUS_PENDING:
+        return
+
+    with transaction.atomic():
+        order.status = InventoryOrder.STATUS_CANCELLED
+        order.cancelled_at = timezone.now()
+        order.cancelled_by = user if user and user.is_authenticated else None
+        order.save(update_fields=["status", "cancelled_at", "cancelled_by"])
 

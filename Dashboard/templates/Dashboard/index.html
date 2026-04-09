@@ -3,7 +3,10 @@
 {% block title %}Dashboard | {{ block.super }}{% endblock title %}
 {% block content %}
 
-<p>Dashboard ({% if ns_site_mode == "management" %}Company Wide{% else %}{% if ns_dealership_label %}{{ ns_dealership_label }}{% else %}Dealership{% endif %}{% endif %})</p>
+<p>
+	Dashboard
+	({% if request.ns_can_view_all_dealerships %}Company Wide{% else %}{% if ns_dealership_label %}{{ ns_dealership_label }}{% else %}Dealership{% endif %}{% endif %})
+</p>
 <p>Dashboard for the C3 Digital Transformation System</p>
 
 <div class="row">
@@ -72,7 +75,7 @@
 		<div class="p-3 bg-white border rounded">
 			<h2 class="h5 mb-3">
 				Inventory by product
-				({% if ns_site_mode == "management" %}Company Wide{% else %}{% if ns_dealership_label %}{{ ns_dealership_label }}{% else %}Dealership{% endif %}{% endif %})
+				({% if request.ns_can_view_all_dealerships %}Company Wide{% else %}{% if ns_dealership_label %}{{ ns_dealership_label }}{% else %}Dealership{% endif %}{% endif %})
 			</h2>
 			<div class="text-center">
 				{% if inventory_totals_png_b64 %}

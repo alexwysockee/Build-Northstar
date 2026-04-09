@@ -1,6 +1,6 @@
 {% extends "Dashboard/base.html" %}
 {% load static %}
-{# User list: avatar, email, dealership ID (color-coded), active, groups, last login, date joined; actions. #}
+{# User list: user ID, avatar/name, email, dealership ID, active, groups, last login, date joined; actions row below. #}
 {% block title %}Users | {{ block.super }}{% endblock title %}
 {% block content %}
 <h1 class="mb-3">Users</h1>
@@ -11,6 +11,7 @@
   <caption>User List</caption>
   <thead>
     <tr>
+      <th scope="col">User ID</th>
       <th scope="col">User</th>
       <th scope="col">Email</th>
       <th scope="col">Dealership ID</th>
@@ -18,13 +19,13 @@
       <th scope="col">Groups</th>
       <th scope="col">Last login</th>
       <th scope="col">Date joined</th>
-      {% if can_modify_user_groups %}<th scope="col"></th>{% endif %}
     </tr>
   </thead>
   <tbody>
-    {% for u, last_login_class, avatar_url, dealership_id, dealership_badge_variant, is_management in users_with_login %}
+    {% for u, last_login_class, avatar_url, dealership_id, dealership_badge_class, is_management, can_manage_user in users_with_login %}
     <tr>
-      <td scope="row" class="text-nowrap">
+      <td class="pt-3 text-muted">{{ u.id }}</td>
+      <td class="text-nowrap pt-3">
         {% if avatar_url %}
           <img src="{{ avatar_url }}" alt="Avatar" class="avatar-circle me-2">
         {% else %}
@@ -32,42 +33,46 @@
         {% endif %}
         {{ u.username }}
       </td>
-      <td>{{ u.email|default:"—" }}</td>
-      <td>
+      <td class="pt-3">{{ u.email|default:"—" }}</td>
+      <td class="pt-3">
         {% if is_management %}
           <span class="badge bg-light text-primary me-1" title="Management">M</span>
         {% endif %}
         {% if dealership_id %}
-          <span class="badge bg-{{ dealership_badge_variant }}{% if dealership_badge_variant == 'warning' %} text-dark{% endif %}">{{ dealership_id }}</span>
+          <span class="badge rounded-pill text-bg-dark ns-dealership-badge {{ dealership_badge_class|default:'' }}">{{ dealership_id }}</span>
         {% else %}
           <span class="badge bg-secondary">—</span>
         {% endif %}
       </td>
-      <td>{% if u.is_active %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
-      <td>{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
-      <td>
+      <td class="pt-3">{% if u.is_active %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+      <td class="pt-3">{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+      <td class="pt-3">
         <span class="{{ last_login_class }}">
           {% if u.last_login %}{{ u.last_login|date:"Y-m-d H:i" }}{% else %}Never{% endif %}
         </span>
       </td>
-      <td>{{ u.date_joined|date:"Y-m-d H:i" }}</td>
-      {% if can_modify_user_groups %}
-      <td class="text-nowrap">
-        <a href="{% url 'Profile:user_edit_groups' u.id %}" class="btn btn-sm btn-outline-primary">Edit groups &amp; dealership</a>
-        {% if not u.is_superuser and u.username|lower != "admin" %}
-        <a href="{% url 'Profile:user_set_password' u.id %}" class="btn btn-sm btn-outline-secondary">Set password</a>
-        {% endif %}
-        {% if u.id != request.user.id and not u.is_superuser and u.username|lower != "admin" %}
-        <form method="post" action="{% url 'Profile:user_delete' u.id %}" class="d-inline" onsubmit="return confirm('Remove user {{ u.username }}? This cannot be undone.');">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
-        </form>
-        {% endif %}
-      </td>
-      {% endif %}
+      <td class="pt-3">{{ u.date_joined|date:"Y-m-d H:i" }}</td>
     </tr>
+    {% if can_modify_user_groups and can_manage_user %}
+    <tr>
+      <td colspan="8" class="pb-3 pt-0 ps-3 bg-light border-bottom">
+        <div class="d-flex flex-row flex-wrap align-items-center gap-2">
+          <a href="{% url 'Profile:user_edit_groups' u.id %}" class="btn btn-sm btn-outline-primary">Edit groups &amp; dealership</a>
+          {% if not u.is_superuser and u.username|lower != "admin" %}
+          <a href="{% url 'Profile:user_set_password' u.id %}" class="btn btn-sm btn-outline-secondary">Set password</a>
+          {% endif %}
+          {% if u.id != request.user.id and not u.is_superuser and u.username|lower != "admin" %}
+          <form method="post" action="{% url 'Profile:user_delete' u.id %}" class="m-0 d-inline" onsubmit="return confirm('Remove user {{ u.username }}? This cannot be undone.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+          </form>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+    {% endif %}
     {% empty %}
-    <tr><td colspan="{% if can_modify_user_groups %}8{% else %}7{% endif %}">No users.</td></tr>
+    <tr><td colspan="8">No users.</td></tr>
     {% endfor %}
   </tbody>
 </table>

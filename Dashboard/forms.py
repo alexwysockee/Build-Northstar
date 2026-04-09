@@ -112,8 +112,8 @@ class DailySaleForm(forms.ModelForm):
                 available += int(self.instance.amount or 0)
             if available < amount:
                 raise ValidationError(
-                    f"Insufficient physical inventory at {dealership.name}. "
-                    f"Available {available}, requested {amount}."
+                    f"This sale was not saved - not enough physical inventory at {dealership.name}. "
+                    f"On hand: {available}. Amount entered: {amount}."
                 )
 
         return cleaned

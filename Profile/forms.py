@@ -54,6 +54,10 @@ class UserGroupsForm(forms.Form):
             prof = UserProfile.objects.filter(user=user).select_related("dealership").first()
             if prof and prof.dealership_id:
                 self.initial["dealership"] = prof.dealership_id
+            else:
+                default_home = Dealership.objects.filter(is_default_home=True).order_by("id").first()
+                if default_home:
+                    self.initial["dealership"] = default_home.pk
 
     def save(self):
         self.user.groups.set(self.cleaned_data["groups"])

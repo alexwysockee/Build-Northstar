@@ -223,3 +223,86 @@ textarea.form-control {
   color: #0a58ca;
   font-weight: 700;
 }
+
+/*
+ * Dealership ID badges (Users + navbar): one color per location.
+ * Classes set on Dealership.badge_css_class (see migration 0012).
+ */
+.badge.ns-dealership-badge {
+  color: #fff !important;
+  --bs-badge-color: #fff;
+}
+
+/* C3 brand blue — Mississauga (main office) */
+.badge.ns-dealership-badge.ns-badge-dealership-mississauga,
+.navbar.bg-primary .badge.ns-dealership-badge.ns-badge-dealership-mississauga {
+  background-color: var(--theme-primary) !important;
+}
+
+/* Dark blue — Toronto */
+.badge.ns-dealership-badge.ns-badge-dealership-toronto,
+.navbar.bg-primary .badge.ns-dealership-badge.ns-badge-dealership-toronto {
+  background-color: #001f3f !important;
+}
+
+/* Orange — Edmonton */
+.badge.ns-dealership-badge.ns-badge-dealership-edmonton,
+.navbar.bg-primary .badge.ns-dealership-badge.ns-badge-dealership-edmonton {
+  background-color: #ea580c !important;
+}
+
+/* Brighter red — Calgary (contrast vs Lachute) */
+.badge.ns-dealership-badge.ns-badge-dealership-calgary,
+.navbar.bg-primary .badge.ns-dealership-badge.ns-badge-dealership-calgary {
+  background-color: #ef4444 !important;
+}
+
+/* Dark red — Lachute */
+.badge.ns-dealership-badge.ns-badge-dealership-lachute,
+.navbar.bg-primary .badge.ns-dealership-badge.ns-badge-dealership-lachute {
+  background-color: #7f1d1d !important;
+}
+
+/* Legacy / unknown class: neutral dark */
+.badge.ns-dealership-badge.ns-badge-navy,
+.badge.ns-dealership-badge.ns-badge-c3-toronto {
+  background-color: #001f3f !important;
+}
+
+.badge.ns-dealership-badge:not([class*="ns-badge-dealership-"]):not(.ns-badge-navy):not(.ns-badge-c3-toronto) {
+  background-color: #495057 !important;
+}
+
+/* Sales tab: daily sales this month — embedded viewport: header + ~8 body rows, scroll the rest */
+.daily-sales-month-wrap {
+  --daily-sales-thead: 2.875rem;
+  /* Per-row budget for table-sm + two btn-sm; total ≈ header + 8 rows (tweak --daily-sales-row if needed) */
+  /* Taller rows: sale date + “By user (id)” subline like inventory orders */
+  --daily-sales-row: 2.85rem;
+  max-height: calc(var(--daily-sales-thead) + 8 * var(--daily-sales-row));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+}
+
+.daily-sales-month-wrap .table-responsive {
+  margin-bottom: 0;
+}
+
+.daily-sales-month-table {
+  margin-bottom: 0;
+}
+
+.daily-sales-month-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Match .table thead th (sticky needs opaque-ish fill so rows don’t show through) */
+  background-color: rgba(13, 110, 253, 0.1);
+  color: var(--theme-primary-dark);
+  border-color: rgba(13, 110, 253, 0.18);
+  font-weight: 700;
+  box-shadow: 0 1px 0 var(--bs-border-color, #dee2e6);
+}

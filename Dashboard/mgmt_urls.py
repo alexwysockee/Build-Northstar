@@ -11,6 +11,7 @@ urlpatterns = [
     path("inventory/", views.inventory, name="inventory"),
     path("inventory/order/", views.inventory_order_submit, name="inventory_order_submit"),
     path("inventory/order/<int:order_pk>/deliver/", views.inventory_order_deliver, name="inventory_order_deliver"),
+    path("inventory/order/<int:order_pk>/cancel/", views.inventory_order_cancel, name="inventory_order_cancel"),
     path("sales/", views.sales, name="sales"),
     path("sales/add/", views.sales_add_product, name="sales_add_product"),
     path("sales/add-daily/", views.sales_add_daily, name="sales_add_daily"),

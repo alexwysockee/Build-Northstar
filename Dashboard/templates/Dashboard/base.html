@@ -62,7 +62,7 @@
                         <span class="badge bg-light text-primary me-2">{{ ns_site_label }}</span>
                     {% endif %}
                     {% if ns_dealership_label %}
-                        <span class="badge bg-dark">{{ ns_dealership_label }}</span>
+                        <span class="badge rounded-pill text-bg-dark ns-dealership-badge {{ ns_dealership_badge_class|default:'' }}">{{ ns_dealership_label }}</span>
                     {% endif %}
                 </li>
                 <li class="nav-item dropdown">

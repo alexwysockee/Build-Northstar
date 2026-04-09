@@ -21,7 +21,7 @@
 {% endif %}
 
 {% for section in dealership_sections %}
-<div class="card mb-4">
+<div class="card mb-4" style="border-left: 4px solid {{ section.accent_color }};">
 	<div class="card-header fw-semibold">{{ section.dealership.name }}</div>
 	<div class="card-body p-0">
 		<div class="table-responsive">
@@ -70,7 +70,7 @@
 	<div class="card-body">
 		<p class="text-muted small mb-3">
 			Submit a replenishment request. New orders start as <strong>Pending</strong>.
-			Managers mark them <strong>Delivered</strong> when stock arrives.
+			Authorized users mark them <strong>Delivered</strong> when stock arrives, or <strong>Cancelled</strong> if the request should not be fulfilled.
 		</p>
 		<form method="post" action="{% url ns_site_namespace|add:':inventory_order_submit' %}">
 			{% csrf_token %}
@@ -123,7 +123,7 @@
 				</thead>
 				<tbody>
 				{% for o in inventory_orders %}
-					<tr class="{% if o.status == 'pending' %}table-warning{% else %}table-success{% endif %}">
+					<tr class="{% if o.status == 'pending' %}table-warning{% elif o.status == 'delivered' %}table-success{% else %}table-secondary{% endif %}">
 						<td>{{ o.display_order_id }}</td>
 						<td>{{ o.product.name }}</td>
 						<td>{{ o.dealership.name }}</td>
@@ -131,11 +131,24 @@
 						<td>
 							{% if o.status == 'pending' %}
 								<span class="fw-semibold text-dark">Pending</span>
+							{% elif o.status == 'delivered' %}
+								<div class="fw-semibold">Delivered</div>
+								{% if o.date_received %}
+									<small class="text-muted">Marked {{ o.date_received|date:"Y-m-d H:i" }}{% if o.delivered_by %} · {{ o.delivered_by.get_full_name|default:o.delivered_by.username }} ({{ o.delivered_by_id }}){% endif %}</small>
+								{% endif %}
 							{% else %}
-								<span class="fw-semibold">Delivered</span>
+								<div class="fw-semibold">Cancelled</div>
+								{% if o.cancelled_at %}
+									<small class="text-muted">Marked {{ o.cancelled_at|date:"Y-m-d H:i" }}{% if o.cancelled_by %} · {{ o.cancelled_by.get_full_name|default:o.cancelled_by.username }} ({{ o.cancelled_by_id }}){% endif %}</small>
+								{% endif %}
 							{% endif %}
 						</td>
-						<td class="text-nowrap">{{ o.date_requested|date:"Y-m-d H:i" }}</td>
+						<td class="text-nowrap">
+							{{ o.date_requested|date:"Y-m-d H:i" }}
+							<small class="text-muted d-block">
+								By {% if o.requested_by %}{{ o.requested_by.get_full_name|default:o.requested_by.username }} ({{ o.requested_by_id }}){% else %}—{% endif %}
+							</small>
+						</td>
 						{% if can_manage_inventory_orders %}
 							<td class="text-nowrap">
 								{% if o.status == 'pending' %}
@@ -143,12 +156,16 @@
 										{% csrf_token %}
 										<button type="submit" class="btn btn-sm btn-outline-primary">Delivered</button>
 									</form>
+									<form method="post" action="{% url ns_site_namespace|add:':inventory_order_cancel' o.pk %}" class="d-inline" onsubmit="return confirm('Cancel order {{ o.display_order_id }}? Stock will not change.');">
+										{% csrf_token %}
+										<button type="submit" class="btn btn-sm btn-outline-secondary">Cancel</button>
+									</form>
 								{% endif %}
 							</td>
 						{% endif %}
 					</tr>
 				{% empty %}
-					<tr><td colspan="7" class="text-muted">No inventory orders yet.</td></tr>
+					<tr><td colspan="{% if can_manage_inventory_orders %}7{% else %}6{% endif %}" class="text-muted">No inventory orders yet.</td></tr>
 				{% endfor %}
 				</tbody>
 			</table>

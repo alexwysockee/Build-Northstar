@@ -1,4 +1,7 @@
 from django.contrib.auth.models import User
+from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponseForbidden
 from django.utils import timezone
@@ -37,19 +40,43 @@ def _is_protected_admin_account(user_obj: User) -> bool:
     return bool(user_obj.is_superuser or user_obj.username.lower() == "admin")
 
 
+def _can_manage_user_account(actor: User, target: User) -> bool:
+    """
+    Who may change target's groups/dealership, password, or remove the user.
+
+    Staff: always yes.
+    Non-staff Management: may not act on another Management user (except themselves for
+    groups/password where applicable). Back Office unchanged.
+    """
+    if not actor.is_authenticated:
+        return False
+    if actor.is_staff:
+        return True
+    if actor.groups.filter(name="Management").exists():
+        if target.groups.filter(name="Management").exists() and target.pk != actor.pk:
+            return False
+    return True
+
+
+_MGMT_ON_MGMT_FORBIDDEN = (
+    "You don't have permission to change groups, password, or remove another Management user."
+)
+
+
 def user_list(request):
     """List all users. Only staff, Management, Back Office can access."""
     if not _can_see_users(request.user):
         return HttpResponseForbidden("You don't have permission to view users.")
     users = User.objects.all().order_by("username").prefetch_related("groups")
-    profiles = UserProfile.objects.filter(user__in=users).select_related("user")
+    profiles = UserProfile.objects.filter(user__in=users).select_related("user", "dealership")
     avatar_by_user_id = {p.user_id: (p.avatar.url if p.avatar else None) for p in profiles}
 
     profile_by_user_id = {p.user_id: p for p in profiles}
 
-    def _dealership_badge_variant(dealership_id):
-        # Keep this simple/stable: a single brand-consistent variant when assigned.
-        return "primary" if dealership_id else "secondary"
+    def _dealership_badge_class(profile):
+        if not profile or not profile.dealership_id:
+            return "bg-secondary"
+        return profile.dealership.resolved_badge_css_class()
 
     users_with_login = [
         (
@@ -57,8 +84,9 @@ def user_list(request):
             _last_login_css_class(u),
             avatar_by_user_id.get(u.id),
             getattr(profile_by_user_id.get(u.id), "dealership_id", None),
-            _dealership_badge_variant(getattr(profile_by_user_id.get(u.id), "dealership_id", None)),
+            _dealership_badge_class(profile_by_user_id.get(u.id)),
             bool(u.is_staff or u.groups.filter(name="Management").exists()),
+            _can_manage_user_account(request.user, u),
         )
         for u in users
     ]
@@ -94,15 +122,19 @@ def user_delete(request, user_id):
         return HttpResponseForbidden("The admin account cannot be removed.")
     if target.pk == request.user.pk:
         return HttpResponseForbidden("You cannot remove your own account.")
+    if not _can_manage_user_account(request.user, target):
+        return HttpResponseForbidden(_MGMT_ON_MGMT_FORBIDDEN)
     target.delete()
     return redirect("Profile:user_list")
 
 
 def user_edit_groups(request, user_id):
-    """Edit a user's groups. Only staff and Management can access."""
+    """Edit a user's groups. Staff, Management, and Back Office can access, with Management-on-Management restrictions."""
     if not _can_see_users(request.user):
         return HttpResponseForbidden("You don't have permission to edit user groups.")
     edit_user = get_object_or_404(User, pk=user_id)
+    if not _can_manage_user_account(request.user, edit_user):
+        return HttpResponseForbidden(_MGMT_ON_MGMT_FORBIDDEN)
     if request.method == "POST":
         form = UserGroupsForm(user=edit_user, data=request.POST)
         if form.is_valid():
@@ -121,6 +153,8 @@ def user_set_password(request, user_id):
     target = get_object_or_404(User, pk=user_id)
     if _is_protected_admin_account(target):
         return HttpResponseForbidden("The admin account password cannot be changed here.")
+    if not _can_manage_user_account(request.user, target):
+        return HttpResponseForbidden(_MGMT_ON_MGMT_FORBIDDEN)
     if request.method == "POST":
         form = UserSetPasswordForm(request.POST)
         if form.is_valid():
@@ -139,19 +173,37 @@ def profile(request):
 
     prof, _ = UserProfile.objects.get_or_create(user=request.user)
 
-    if request.method == "POST":
-        form = ProfilePictureForm(request.POST, request.FILES)
-        if form.is_valid():
-            avatar = form.cleaned_data.get("avatar")
-            if avatar:
-                # Replace old avatar file
-                if prof.avatar:
-                    prof.avatar.delete(save=False)
-                prof.avatar = avatar
-                prof.save()
-            return redirect("Profile:profile")
-    else:
-        form = ProfilePictureForm()
+    avatar_form = ProfilePictureForm()
+    password_form = PasswordChangeForm(user=request.user)
 
-    context = {"profile": prof, "form": form}
+    if request.method == "POST":
+        if "save_password" in request.POST:
+            password_form = PasswordChangeForm(user=request.user, data=request.POST)
+            if password_form.is_valid():
+                user = password_form.save()
+                # Keep the user logged in after changing their password.
+                update_session_auth_hash(request, user)
+                messages.success(request, "Password updated successfully.")
+                return redirect("Profile:profile")
+            messages.error(request, "Could not update password. Please correct the errors below.")
+        else:
+            avatar_form = ProfilePictureForm(request.POST, request.FILES)
+            if avatar_form.is_valid():
+                avatar = avatar_form.cleaned_data.get("avatar")
+                if avatar:
+                    # Replace old avatar file
+                    if prof.avatar:
+                        prof.avatar.delete(save=False)
+                    prof.avatar = avatar
+                    prof.save()
+                    messages.success(request, "Profile picture updated.")
+                return redirect("Profile:profile")
+            messages.error(request, "Could not update profile picture. Please correct the errors below.")
+
+    # Bootstrap styling for password form fields.
+    for f in ("old_password", "new_password1", "new_password2"):
+        if f in password_form.fields:
+            password_form.fields[f].widget.attrs.setdefault("class", "form-control")
+
+    context = {"profile": prof, "form": avatar_form, "password_form": password_form}
     return render(request, "Profile/profile.html", context)

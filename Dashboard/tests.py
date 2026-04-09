@@ -45,6 +45,9 @@ class C3SystemTestSuite(TestCase):
 
         inventory.refresh_from_db()
         self.assertEqual(inventory.quantity, 15)
+        sale = DailySale.objects.get(product=self.product, dealership=self.dealer)
+        admin = User.objects.get(username="admin")
+        self.assertEqual(sale.entered_by_id, admin.id)
 
     def test_prevent_negative_inventory(self):
         """Technique 5: Verify inventory does not drop below zero"""
