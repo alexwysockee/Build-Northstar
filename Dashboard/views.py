@@ -1,6 +1,9 @@
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
-from django.db.models import Sum
+from django.contrib.auth import get_user_model
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+from django.db.models import Q, Sum
 from django.contrib import messages
 from django.http import FileResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
@@ -8,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 from .forms import ReportForm, EntryForm, SalesProductForm, DailySaleForm
-from .forms import InventoryRequestForm
+from .forms import InventoryRequestForm, ClaimForm, ClaimStatusForm
 from .inventory_services import (
     apply_sale_delta,
     cancel_inventory_order,
@@ -18,7 +21,9 @@ from .inventory_services import (
     inventory_status_tuple,
     user_home_dealership,
 )
+from .scope import user_can_view_all_dealerships
 from .models import (
+    Claim,
     Dealership,
     DailySale,
     Entry,
@@ -30,14 +35,33 @@ from .models import (
 )
 
 
-def _can_modify_daily_sales(user):
-    """True if user is staff, Sales Rep, or Dealership User."""
+def _staff_or_superuser(user):
+    """Django admin staff or superuser (company-wide portal access)."""
     if not user.is_authenticated:
         return False
-    if user.is_staff:
+    return bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+
+
+def _can_modify_daily_sales(user):
+    """True if user is staff/superuser, Sales Rep, or Dealership User."""
+    if not user.is_authenticated:
+        return False
+    if _staff_or_superuser(user):
         return True
     group_names = set(user.groups.values_list("name", flat=True))
     return "Sales Rep" in group_names or "Dealership User" in group_names
+
+
+def _can_view_management_sales_archive(user):
+    """All-time sales archive on Sales page: Management group, or staff/superuser."""
+    if not user.is_authenticated:
+        return False
+    if _staff_or_superuser(user):
+        return True
+    return user.groups.filter(name="Management").exists()
+
+
+MANAGEMENT_SALES_HISTORY_PER_PAGE = 75
 
 
 def _is_management(user):
@@ -78,7 +102,7 @@ def index(request):
     sales_products = list(SalesProduct.objects.all())
 
     y, m = _sales_month_today()
-    can_view_all = bool(getattr(request, "ns_can_view_all_dealerships", False))
+    can_view_all = user_can_view_all_dealerships(request.user)
     home_dealership = getattr(request, "ns_dealership", None)
     if not can_view_all and not home_dealership:
         return HttpResponseForbidden("No dealership is assigned to your user.")
@@ -225,7 +249,7 @@ def sales(request):
     """Sales tab with editable C3 Product Performance table (sales this month)."""
     products = SalesProduct.objects.all()
     y, m = _sales_month_today()
-    can_view_all = bool(getattr(request, "ns_can_view_all_dealerships", False))
+    can_view_all = user_can_view_all_dealerships(request.user)
     home_dealership = getattr(request, "ns_dealership", None)
     if not can_view_all and not home_dealership:
         return HttpResponseForbidden("No dealership is assigned to your user.")
@@ -263,7 +287,84 @@ def sales(request):
         "daily_sales_this_month": daily_sales_qs,
         "add_form": SalesProductForm(),
         "add_daily_form": DailySaleForm(user=request.user),
+        "show_management_sales_archive": False,
     }
+
+    if _can_view_management_sales_archive(request.user):
+        hist_dealership = (request.GET.get("hist_dealership") or "").strip()
+        hist_product = (request.GET.get("hist_product") or "").strip()
+        hist_seller = (request.GET.get("hist_seller") or "").strip()
+        hist_q = (request.GET.get("hist_q") or "").strip()
+
+        history_qs = DailySale.objects.select_related(
+            "product", "dealership", "entered_by"
+        ).order_by("-date", "-id")
+
+        if hist_dealership.isdigit():
+            history_qs = history_qs.filter(dealership_id=int(hist_dealership))
+        if hist_product.isdigit():
+            history_qs = history_qs.filter(product_id=int(hist_product))
+        if hist_seller == "__none__":
+            history_qs = history_qs.filter(entered_by__isnull=True)
+        elif hist_seller.isdigit():
+            history_qs = history_qs.filter(entered_by_id=int(hist_seller))
+
+        if hist_q:
+            q_norm = hist_q.lstrip("#").strip()
+            q_filter = Q(order_number__icontains=hist_q)
+            if q_norm != hist_q:
+                q_filter |= Q(order_number__icontains=q_norm)
+            if hist_q.isdigit():
+                q_filter |= Q(pk=int(hist_q))
+            history_qs = history_qs.filter(q_filter)
+
+        paginator = Paginator(history_qs, MANAGEMENT_SALES_HISTORY_PER_PAGE)
+        hist_page = request.GET.get("hist_page") or "1"
+        try:
+            page_obj = paginator.page(hist_page)
+        except PageNotAnInteger:
+            page_obj = paginator.page(1)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages or 1)
+
+        seller_ids = (
+            DailySale.objects.exclude(entered_by_id__isnull=True)
+            .values_list("entered_by_id", flat=True)
+            .distinct()
+        )
+        User = get_user_model()
+        sellers_for_history = User.objects.filter(pk__in=seller_ids).order_by(
+            "first_name", "last_name", "username"
+        )
+
+        preserve_pairs = []
+        for key in request.GET:
+            if key == "hist_page":
+                continue
+            if key.startswith("hist_"):
+                for val in request.GET.getlist(key):
+                    preserve_pairs.append((key, val))
+        management_history_preserve_qs = urlencode(preserve_pairs)
+
+        context.update(
+            {
+                "show_management_sales_archive": True,
+                "management_history_page": page_obj,
+                "management_history_filters": {
+                    "dealership": hist_dealership,
+                    "product": hist_product,
+                    "seller": hist_seller,
+                    "q": hist_q,
+                },
+                "management_history_preserve_qs": management_history_preserve_qs,
+                "dealerships_for_history": Dealership.objects.order_by("name"),
+                "products_for_history": SalesProduct.objects.order_by(
+                    "display_order", "id"
+                ),
+                "sellers_for_history": sellers_for_history,
+            }
+        )
+
     return render(request, "Dashboard/sales.html", context)
 
 
@@ -306,9 +407,9 @@ def _messages_for_invalid_form(request, form, *, context_note=None):
 
 @require_POST
 def sales_add_daily(request):
-    """Add a daily sale. Allowed only for admin, Sales Rep, Dealership User."""
+    """Add a sale. Allowed only for admin, Sales Rep, Dealership User."""
     if not _can_modify_daily_sales(request.user):
-        messages.error(request, "Daily sale was not added: you don't have permission to add daily sales.")
+        messages.error(request, "Sale was not added: you don't have permission to add sales.")
         return _redirect_sales(request)
     form = DailySaleForm(request.POST, user=request.user)
     if form.is_valid():
@@ -317,14 +418,14 @@ def sales_add_daily(request):
         obj.save()
         apply_sale_delta(obj.product, obj.dealership, int(obj.amount))
     else:
-        _messages_for_invalid_form(request, form, context_note="Daily sale was not added:")
+        _messages_for_invalid_form(request, form, context_note="Sale was not added:")
     return _redirect_sales(request)
 
 
 def sales_edit_daily(request, daily_pk):
-    """Edit a daily sale. Allowed only for admin, Sales Rep, Dealership User."""
+    """Edit a sale. Allowed only for admin, Sales Rep, Dealership User."""
     if not _can_modify_daily_sales(request.user):
-        messages.error(request, "Daily sale was not updated: you don't have permission to edit daily sales.")
+        messages.error(request, "Sale was not updated: you don't have permission to edit sales.")
         return _redirect_sales(request)
     obj = get_object_or_404(DailySale, pk=daily_pk)
     if request.method == "POST":
@@ -345,7 +446,7 @@ def sales_edit_daily(request, daily_pk):
                     int(saved.amount) - old_amount,
                 )
             return _redirect_sales(request)
-        _messages_for_invalid_form(request, form, context_note="Daily sale was not updated:")
+        _messages_for_invalid_form(request, form, context_note="Sale was not updated:")
     else:
         form = DailySaleForm(instance=obj, user=request.user)
     context = {"form": form, "daily_sale": obj}
@@ -354,9 +455,9 @@ def sales_edit_daily(request, daily_pk):
 
 @require_POST
 def sales_delete_daily(request, daily_pk):
-    """Delete a daily sale. Allowed only for admin, Sales Rep, Dealership User."""
+    """Delete a sale. Allowed only for admin, Sales Rep, Dealership User."""
     if not _can_modify_daily_sales(request.user):
-        messages.error(request, "Daily sale was not deleted: you don't have permission.")
+        messages.error(request, "Sale was not deleted: you don't have permission.")
         return _redirect_sales(request)
     obj = get_object_or_404(DailySale, pk=daily_pk)
     apply_sale_delta(obj.product, obj.dealership, -int(obj.amount))
@@ -403,7 +504,7 @@ def _can_view_all_inventory(user):
     """Managers/admin: see inventory for every dealership."""
     if not user.is_authenticated:
         return False
-    if user.is_staff:
+    if _staff_or_superuser(user):
         return True
     return user.groups.filter(name="Management").exists()
 
@@ -412,7 +513,7 @@ def _can_submit_inventory_order(user):
     """Sales Rep and Dealership User can submit stock requests."""
     if not user.is_authenticated:
         return False
-    if user.is_staff:
+    if _staff_or_superuser(user):
         return True
     return user.groups.filter(name__in=["Sales Rep", "Dealership User"]).exists()
 
@@ -421,7 +522,7 @@ def _can_manage_inventory_orders(user):
     """Deliver, cancel, or adjust stock for orders (Management, Back Office, Sales Rep, Dealership User)."""
     if not user.is_authenticated:
         return False
-    if user.is_staff:
+    if _staff_or_superuser(user):
         return True
     return user.groups.filter(
         name__in=["Management", "Back Office", "Sales Rep", "Dealership User"]
@@ -430,7 +531,7 @@ def _can_manage_inventory_orders(user):
 
 def _inventory_order_scope_denied_response(request, order):
     """Sales Rep / Dealership User may only act on orders for their home dealership."""
-    if request.user.is_staff or request.user.groups.filter(
+    if _staff_or_superuser(request.user) or request.user.groups.filter(
         name__in=["Management", "Back Office"]
     ).exists():
         return None
@@ -589,11 +690,20 @@ def _can_access_claims(user):
     """WIP Claims page access."""
     if not user.is_authenticated:
         return False
-    if user.is_staff:
+    if _staff_or_superuser(user):
         return True
     return user.groups.filter(
         name__in=["Management", "Back Office", "Sales Rep", "Dealership User"]
     ).exists()
+
+
+def _can_change_claim_status(user):
+    """Approve/reject/etc. in the portal: staff, superuser, Management, or Back Office."""
+    if not user.is_authenticated:
+        return False
+    if _staff_or_superuser(user):
+        return True
+    return user.groups.filter(name__in=["Management", "Back Office"]).exists()
 
 
 def _can_access_inspections(user):
@@ -602,61 +712,122 @@ def _can_access_inspections(user):
 
 
 def claims(request):
-    """Claims page (WIP stub)."""
+    """Claims: list (scoped by dealership) and submit new claims."""
     if not _can_access_claims(request.user):
         return HttpResponseForbidden("You don't have permission to view claims.")
 
-    wip_mode = True
-    claim_status_choices = [
-        ("draft", "Draft"),
-        ("pending", "Pending"),
-        ("approved", "Approved"),
-        ("rejected", "Rejected"),
-        ("received", "Received"),
-    ]
+    can_view_all = user_can_view_all_dealerships(request.user)
+    home_dealership = getattr(request, "ns_dealership", None)
+    if not can_view_all and not home_dealership:
+        return HttpResponseForbidden("No dealership is assigned to your user.")
 
-    # Dummy context (test stub) to keep the page usable until real models exist.
-    dealerships = [
-        {"pk": 1, "name": "C3 Mississauga"},
-        {"pk": 2, "name": "Northside Motors"},
-        {"pk": 3, "name": "Westside Auto"},
-    ]
-    products = list(SalesProduct.objects.all()[:6])
-    products_stub = [{"pk": p.pk, "name": p.name} for p in products]
+    ns = getattr(request, "ns_site_namespace", None) or "Dashboard"
 
-    sample_claims = [
-        {
-            "id": 1,
-            "status": "pending",
-            "dealership": dealerships[0],
-            "product": products_stub[0] if products_stub else {"pk": None, "name": "—"},
-            "quantity": 4,
-            "submitted_at": timezone.now(),
-            "customer_name": "Customer 1",
-        }
-    ]
-
-    submitted_stub_data = None
     if request.method == "POST":
-        submitted_stub_data = {
-            "customer_name": (request.POST.get("customer_name") or "").strip(),
-            "dealership_id": request.POST.get("dealership_id") or "",
-            "product_id": request.POST.get("product_id") or "",
-            "order_number": (request.POST.get("order_number") or "").strip(),
-            "quantity": request.POST.get("quantity") or "",
-            "reason": (request.POST.get("reason") or "").strip(),
-        }
-        messages.success(request, "Claim submission received (WIP stub). No data was saved yet.")
+        form = ClaimForm(request.POST, user=request.user)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.submitted_by = request.user
+            obj.status = Claim.STATUS_PENDING
+            obj.save()
+            messages.success(
+                request,
+                f"Claim #{obj.pk} submitted successfully. Status: Pending.",
+            )
+            return redirect(f"{ns}:claims")
+        _messages_for_invalid_form(request, form, context_note="Claim was not submitted:")
+    else:
+        form = ClaimForm(user=request.user)
+
+    claims_qs = Claim.objects.select_related(
+        "daily_sale",
+        "daily_sale__dealership",
+        "daily_sale__product",
+        "submitted_by",
+    ).order_by("-date_submitted", "-id")
+    if not can_view_all and home_dealership:
+        claims_qs = claims_qs.filter(daily_sale__dealership=home_dealership)
 
     context = {
-        "wip_mode": wip_mode,
-        "claim_status_choices": claim_status_choices,
-        "dealerships": dealerships,
-        "products": products_stub,
-        "sample_claims": sample_claims,
-        "submitted_stub_data": submitted_stub_data,
+        "claim_form": form,
+        "claims_list": claims_qs[:500],
+        "claims_scope_label": (
+            "Company wide" if can_view_all else (home_dealership.name if home_dealership else "Dealership")
+        ),
+        "can_change_claim_status": _can_change_claim_status(request.user),
     }
     return render(request, "Dashboard/claims.html", context)
+
+
+def claim_detail(request, claim_pk):
+    """Single claim: full fields including notes (same access scope as claims list)."""
+    if not _can_access_claims(request.user):
+        return HttpResponseForbidden("You don't have permission to view claims.")
+
+    can_view_all = user_can_view_all_dealerships(request.user)
+    home_dealership = getattr(request, "ns_dealership", None)
+    if not can_view_all and not home_dealership:
+        return HttpResponseForbidden("No dealership is assigned to your user.")
+
+    qs = Claim.objects.select_related(
+        "daily_sale",
+        "daily_sale__dealership",
+        "daily_sale__product",
+        "submitted_by",
+    )
+    if not can_view_all and home_dealership:
+        qs = qs.filter(daily_sale__dealership=home_dealership)
+    claim = get_object_or_404(qs, pk=claim_pk)
+
+    status_form = None
+    if _can_change_claim_status(request.user):
+        status_form = ClaimStatusForm(initial={"status": claim.status})
+
+    return render(
+        request,
+        "Dashboard/claim_detail.html",
+        {
+            "claim": claim,
+            "can_change_claim_status": _can_change_claim_status(request.user),
+            "claim_status_form": status_form,
+        },
+    )
+
+
+@require_POST
+def claim_set_status(request, claim_pk):
+    """Update claim status (staff, Management, or Back Office only)."""
+    if not _can_change_claim_status(request.user):
+        return HttpResponseForbidden("You don't have permission to change claim status.")
+
+    can_view_all = user_can_view_all_dealerships(request.user)
+    home_dealership = getattr(request, "ns_dealership", None)
+    if not can_view_all and not home_dealership:
+        return HttpResponseForbidden("No dealership is assigned to your user.")
+
+    qs = Claim.objects.select_related(
+        "daily_sale",
+        "daily_sale__dealership",
+        "daily_sale__product",
+        "submitted_by",
+    )
+    if not can_view_all and home_dealership:
+        qs = qs.filter(daily_sale__dealership=home_dealership)
+    claim = get_object_or_404(qs, pk=claim_pk)
+
+    form = ClaimStatusForm(request.POST)
+    ns = getattr(request, "ns_site_namespace", None) or "Dashboard"
+    if form.is_valid():
+        claim.status = form.cleaned_data["status"]
+        claim.save(update_fields=["status"])
+        messages.success(
+            request,
+            f"Claim #{claim.pk} status updated to {claim.get_status_display()}.",
+        )
+    else:
+        _messages_for_invalid_form(request, form, context_note="Status was not updated:")
+
+    return redirect(f"{ns}:claim_detail", claim_pk=claim.pk)
 
 
 def inspections(request):

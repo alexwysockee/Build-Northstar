@@ -1,6 +1,9 @@
 from django.test import TestCase, Client
 from django.contrib.auth.models import User, Group
-from .models import Dealership, SalesProduct, ProductInventory, DailySale
+from django.utils import timezone
+
+from Profile.models import UserProfile
+from .models import Claim, Dealership, SalesProduct, ProductInventory, DailySale
 
 class C3SystemTestSuite(TestCase):
     """
@@ -67,3 +70,122 @@ class C3SystemTestSuite(TestCase):
         # If your logic is "max(0, new_total)", this will pass at 0. 
         # If it fails, you'll see -8, which means you found a bug!
         self.assertEqual(inventory.quantity, 2)
+
+    def test_claims_forbidden_without_role(self):
+        """Users without claims access get 403 (still authenticated)."""
+        self.client.login(username="guest", password="password")
+        response = self.client.get("/home/claims/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_claims_forbidden_without_home_dealership(self):
+        """Sales Rep with no profile dealership cannot use claims (same rule as dashboard)."""
+        rep_no_home = User.objects.create_user(username="rep_nohome", password="password")
+        rep_no_home.groups.add(Group.objects.get(name="Sales Rep"))
+        self.client.login(username="rep_nohome", password="password")
+        response = self.client.get("/home/claims/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_claims_submit_and_scope(self):
+        """Sales Rep submits a claim tied to a real DailySale; listing is scoped to home dealership."""
+        other = Dealership.objects.create(name="Other Store")
+        UserProfile.objects.create(user=self.sales_rep, dealership=self.dealer)
+        ProductInventory.objects.create(product=self.product, dealership=self.dealer, quantity=20)
+        ProductInventory.objects.create(product=self.product, dealership=other, quantity=10)
+        self.client.login(username="rep", password="password")
+
+        self.client.post(
+            "/home/sales/add-daily/",
+            {
+                "product": str(self.product.id),
+                "dealership": str(self.dealer.id),
+                "amount": "5",
+                "date": "2026-03-26",
+            },
+        )
+        sale = DailySale.objects.get(product=self.product, dealership=self.dealer)
+        order_ref = (sale.order_number or "").strip() or str(sale.pk)
+
+        response = self.client.post(
+            "/home/claims/",
+            {
+                "customer_name": "Jane Smith",
+                "order_ref": order_ref,
+                "quantity": "2",
+                "reason": "Defect",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Claim.objects.count(), 1)
+        claim = Claim.objects.get()
+        self.assertEqual(claim.daily_sale_id, sale.pk)
+        self.assertEqual(claim.daily_sale.dealership_id, self.dealer.id)
+        self.assertEqual(claim.status, Claim.STATUS_PENDING)
+
+        sale_other = DailySale.objects.create(
+            product=self.product,
+            dealership=other,
+            date=timezone.localdate(),
+            amount=3,
+        )
+        Claim.objects.create(
+            customer_name="Other",
+            daily_sale=sale_other,
+            quantity=1,
+            submitted_by=self.sales_rep,
+        )
+
+        page = self.client.get("/home/claims/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, f"#{claim.pk}")
+        self.assertContains(page, "View")
+        detail = self.client.get(f"/home/claims/{claim.pk}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Jane Smith")
+        self.assertContains(detail, "Defect")
+        self.assertNotContains(page, "Other")
+
+    def test_sales_rep_cannot_post_claim_status(self):
+        """Only upper-level roles may POST claim status updates."""
+        UserProfile.objects.create(user=self.sales_rep, dealership=self.dealer)
+        sale = DailySale.objects.create(
+            product=self.product,
+            dealership=self.dealer,
+            date=timezone.localdate(),
+            amount=2,
+        )
+        claim = Claim.objects.create(
+            customer_name="A",
+            daily_sale=sale,
+            quantity=1,
+        )
+        self.client.login(username="rep", password="password")
+        r = self.client.post(
+            f"/home/claims/{claim.pk}/status/",
+            {"status": Claim.STATUS_APPROVED},
+        )
+        self.assertEqual(r.status_code, 403)
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, Claim.STATUS_PENDING)
+
+    def test_management_can_post_claim_status(self):
+        mgr = User.objects.create_user(username="mgr", password="password")
+        mgr.groups.add(Group.objects.get_or_create(name="Management")[0])
+        sale = DailySale.objects.create(
+            product=self.product,
+            dealership=self.dealer,
+            date=timezone.localdate(),
+            amount=2,
+        )
+        claim = Claim.objects.create(
+            customer_name="A",
+            daily_sale=sale,
+            quantity=1,
+        )
+        self.client.login(username="mgr", password="password")
+        r = self.client.post(
+            f"/home/claims/{claim.pk}/status/",
+            {"status": Claim.STATUS_APPROVED},
+        )
+        self.assertEqual(r.status_code, 302)
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, Claim.STATUS_APPROVED)

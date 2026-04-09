@@ -135,6 +135,11 @@ class DailySale(models.Model):
     """Daily sales amount for a product (counts toward monthly total)."""
     product = models.ForeignKey(SalesProduct, on_delete=models.CASCADE)
     dealership = models.ForeignKey(Dealership, on_delete=models.CASCADE, related_name="daily_sales")
+    order_number = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Set automatically when the sale is saved (NS-######). Not exposed on portal forms.",
+    )
     date = models.DateField()
     amount = models.PositiveIntegerField(default=0)
     entered_by = models.ForeignKey(
@@ -147,6 +152,22 @@ class DailySale(models.Model):
 
     class Meta:
         ordering = ['-date', 'id']
+
+    def save(self, *args, **kwargs):
+        first_save = self.pk is None
+        super().save(*args, **kwargs)
+        if first_save or not (self.order_number or "").strip():
+            generated = f"NS-{self.pk:06d}"
+            if self.order_number != generated:
+                self.order_number = generated
+                super().save(update_fields=["order_number"])
+
+    def display_order_number(self) -> str:
+        """Order # for lists (auto-generated)."""
+        s = (self.order_number or "").strip()
+        if s:
+            return s
+        return f"#{self.pk:04d}" if self.pk else "—"
 
     def __str__(self):
         return f"{self.product.name} @ {self.dealership.name} on {self.date}: {self.amount}"
@@ -222,3 +243,44 @@ class InventoryOrder(models.Model):
 
     def __str__(self):
         return f"Order {self.pk} {self.product.name} → {self.dealership.name}"
+
+
+class Claim(models.Model):
+    """Customer claim tied to a recorded sale (DailySale); dealership/product/order qty come from that sale."""
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_RECEIVED = "received"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_REJECTED, "Rejected"),
+        (STATUS_RECEIVED, "Received"),
+    ]
+
+    daily_sale = models.ForeignKey(
+        DailySale,
+        on_delete=models.PROTECT,
+        related_name="claims",
+    )
+    customer_name = models.CharField(max_length=200)
+    quantity = models.PositiveIntegerField(
+        help_text="Units covered by this claim; must not exceed the units on the linked sale.",
+    )
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="claims_submitted",
+    )
+    date_submitted = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date_submitted", "-id"]
+
+    def __str__(self):
+        return f"Claim {self.pk} — {self.daily_sale.product.name} @ {self.daily_sale.dealership.name}"

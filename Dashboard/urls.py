@@ -29,5 +29,7 @@ urlpatterns = [
     path("entry/document/<int:doc_id>/delete/", views.delete_entry_document, name="delete_entry_document"),
     path("entry/document/<int:doc_id>/", views.entry_document_inline, name="entry_document_inline"),
     path("claims/", views.claims, name="claims"),
+    path("claims/<int:claim_pk>/status/", views.claim_set_status, name="claim_set_status"),
+    path("claims/<int:claim_pk>/", views.claim_detail, name="claim_detail"),
     path("inspections/", views.inspections, name="inspections"),
 ]

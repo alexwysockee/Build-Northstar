@@ -1,0 +1,96 @@
+{% extends "Dashboard/base.html" %}
+
+{% block title %}Claim #{{ claim.pk }} | {{ block.super }}{% endblock title %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+	<ol class="breadcrumb mb-0">
+		<li class="breadcrumb-item"><a href="{% url ns_site_namespace|add:':claims' %}">Claims</a></li>
+		<li class="breadcrumb-item active" aria-current="page">Claim #{{ claim.pk }}</li>
+	</ol>
+</nav>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+	<h1 class="mb-0">Claim #{{ claim.pk }}</h1>
+	<a href="{% url ns_site_namespace|add:':claims' %}" class="btn btn-outline-secondary">Back to list</a>
+</div>
+
+{% if can_change_claim_status and claim_status_form %}
+<div class="card mb-3" id="update-claim-status">
+	<div class="card-header fw-semibold">Update status</div>
+	<div class="card-body">
+		<form method="post" action="{% url ns_site_namespace|add:':claim_set_status' claim.pk %}" class="row g-2 align-items-end">
+			{% csrf_token %}
+			<div class="col-md-6 col-lg-5">
+				<label class="form-label mb-1" for="{{ claim_status_form.status.id_for_label }}">Status</label>
+				{{ claim_status_form.status }}
+			</div>
+			<div class="col-auto">
+				<button type="submit" class="btn btn-primary">Save status</button>
+			</div>
+		</form>
+	</div>
+</div>
+{% endif %}
+
+<div class="card">
+	<div class="card-body">
+		<dl class="row mb-0">
+			<dt class="col-sm-3">Status</dt>
+			<dd class="col-sm-9">
+				{% if claim.status == "pending" %}
+					<span class="badge bg-warning text-dark">Pending</span>
+				{% elif claim.status == "approved" %}
+					<span class="badge bg-success">Approved</span>
+				{% elif claim.status == "rejected" %}
+					<span class="badge bg-danger">Rejected</span>
+				{% elif claim.status == "received" %}
+					<span class="badge bg-info text-dark">Received</span>
+				{% else %}
+					<span class="badge bg-secondary">{{ claim.get_status_display }}</span>
+				{% endif %}
+			</dd>
+
+			<dt class="col-sm-3">Order #</dt>
+			<dd class="col-sm-9 font-monospace">{{ claim.daily_sale.display_order_number }}</dd>
+
+			<dt class="col-sm-3">Submitted</dt>
+			<dd class="col-sm-9">
+				{{ claim.date_submitted|date:"Y-m-d H:i" }}
+				{% if claim.submitted_by %}
+					<span class="text-muted">— {{ claim.submitted_by.get_full_name|default:claim.submitted_by.username }}</span>
+				{% endif %}
+			</dd>
+
+			<dt class="col-sm-3">Dealership</dt>
+			<dd class="col-sm-9">
+				<span class="badge rounded-pill text-bg-dark ns-dealership-badge {{ claim.daily_sale.dealership.resolved_badge_css_class }}">{{ claim.daily_sale.dealership.name }}</span>
+			</dd>
+
+			<dt class="col-sm-3">Product</dt>
+			<dd class="col-sm-9">{{ claim.daily_sale.product.name }}</dd>
+
+			<dt class="col-sm-3">Sale date</dt>
+			<dd class="col-sm-9">{{ claim.daily_sale.date|date:"Y-m-d" }}</dd>
+
+			<dt class="col-sm-3">Units on sale</dt>
+			<dd class="col-sm-9">{{ claim.daily_sale.amount }}</dd>
+
+			<dt class="col-sm-3">Customer name</dt>
+			<dd class="col-sm-9">{{ claim.customer_name }}</dd>
+
+			<dt class="col-sm-3">Quantity (claim)</dt>
+			<dd class="col-sm-9">{{ claim.quantity }}</dd>
+
+			<dt class="col-sm-3">Notes</dt>
+			<dd class="col-sm-9">
+				{% if claim.reason %}
+					<span class="text-break">{{ claim.reason|linebreaksbr }}</span>
+				{% else %}
+					<span class="text-muted">—</span>
+				{% endif %}
+			</dd>
+		</dl>
+	</div>
+</div>
+{% endblock content %}

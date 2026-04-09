@@ -10,13 +10,16 @@ def profile_context(request):
     if dealership:
         ns_dealership_badge_class = dealership.resolved_badge_css_class()
     if request.user.is_authenticated:
-        can_see_users = request.user.is_staff or request.user.groups.filter(
-            name__in=["Management", "Back Office"]
-        ).exists()
-        # Admin, Sales Rep, or Dealership User can add/edit/delete daily sales
+        can_see_users = (
+            request.user.is_staff
+            or getattr(request.user, "is_superuser", False)
+            or request.user.groups.filter(name__in=["Management", "Back Office"]).exists()
+        )
+        # Staff/superuser, Sales Rep, or Dealership User can add/edit/delete sales
         group_names = {g.name for g in request.user.groups.all()}
         can_modify_daily_sales = (
             request.user.is_staff
+            or getattr(request.user, "is_superuser", False)
             or "Sales Rep" in group_names
             or "Dealership User" in group_names
         )

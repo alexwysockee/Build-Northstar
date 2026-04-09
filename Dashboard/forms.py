@@ -1,9 +1,72 @@
 # Dashboard/forms.py
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 from .inventory_services import quantity_on_hand, user_home_dealership
-from .models import Dealership, DailySale, InventoryOrder, Entry, Report, SalesProduct
+from .models import Claim, Dealership, DailySale, InventoryOrder, Entry, Report, SalesProduct
+
+
+def daily_sales_queryset_for_claim_user(user):
+    """DailySale rows the user may reference when filing a claim (same dealership scope as sales entry)."""
+    qs = DailySale.objects.select_related("product", "dealership").order_by("-date", "-id")
+    if not user or not user.is_authenticated:
+        return DailySale.objects.none()
+
+    can_pick_any = bool(
+        user.is_staff
+        or getattr(user, "is_superuser", False)
+        or user.groups.filter(name__in=["Management", "Back Office"]).exists()
+    )
+    if can_pick_any:
+        return qs
+
+    home = user_home_dealership(user)
+    if home:
+        return qs.filter(dealership_id=home.pk)
+    return DailySale.objects.none()
+
+
+def resolve_daily_sale_from_ref(ref, queryset):
+    """
+    Match a single DailySale from user input (full order number, numeric pk, or NS-######).
+    Returns (sale_or_none, error_message_or_none).
+    """
+    ref = (ref or "").strip()
+    if not ref:
+        return None, "Enter the order number from a recorded sale."
+
+    exact = queryset.filter(order_number__iexact=ref).first()
+    if exact:
+        return exact, None
+
+    digits = ref.lstrip("#").strip()
+    if digits.isdigit():
+        by_pk = queryset.filter(pk=int(digits)).first()
+        if by_pk:
+            return by_pk, None
+
+    ru = ref.upper()
+    if ru.startswith("NS-"):
+        tail = ru[3:].strip()
+        if tail.isdigit():
+            by_pk = queryset.filter(pk=int(tail)).first()
+            if by_pk:
+                return by_pk, None
+
+    q_norm = ref.lstrip("#").strip()
+    q_filter = Q(order_number__icontains=ref)
+    if q_norm != ref:
+        q_filter |= Q(order_number__icontains=q_norm)
+    matches = list(queryset.filter(q_filter).order_by("-date", "-id")[:10])
+    if len(matches) == 0:
+        return None, "No sale matches that reference for your access scope."
+    if len(matches) > 1:
+        return (
+            None,
+            "Multiple sales match. Use the full order number (e.g. NS-000042) or the numeric sale ID.",
+        )
+    return matches[0], None
 
 
 class ReportForm(forms.ModelForm):
@@ -80,6 +143,7 @@ class DailySaleForm(forms.ModelForm):
             and self._user.is_authenticated
             and (
                 self._user.is_staff
+                or getattr(self._user, "is_superuser", False)
                 or self._user.groups.filter(name__in=["Management", "Back Office"]).exists()
             )
         )
@@ -152,6 +216,7 @@ class InventoryRequestForm(forms.ModelForm):
             and self._user.is_authenticated
             and (
                 self._user.is_staff
+                or getattr(self._user, "is_superuser", False)
                 or self._user.groups.filter(name__in=["Management", "Back Office"]).exists()
             )
         )
@@ -166,3 +231,88 @@ class InventoryRequestForm(forms.ModelForm):
         else:
             # WIP fallback: if no assigned dealership exists, still show choices.
             self.fields["dealership"].queryset = Dealership.objects.all().order_by("name")
+
+
+class ClaimForm(forms.ModelForm):
+    """Submit a claim tied to an existing DailySale; only customer name, order reference, qty, and notes are free-form."""
+
+    order_ref = forms.CharField(
+        label="Order number",
+        max_length=80,
+        help_text="Must match a sale already recorded (e.g. NS-000042 from the Sales list).",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "e.g. NS-000042",
+                "maxlength": 80,
+                "autocomplete": "off",
+            }
+        ),
+    )
+
+    class Meta:
+        model = Claim
+        fields = ["customer_name", "quantity", "reason"]
+        labels = {
+            "customer_name": "Customer name",
+            "quantity": "Quantity (for this claim)",
+            "reason": "Notes",
+        }
+        widgets = {
+            "customer_name": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "e.g. Jane Smith", "maxlength": 200}
+            ),
+            "quantity": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "reason": forms.Textarea(
+                attrs={"class": "form-control", "rows": 3, "placeholder": "Optional notes", "maxlength": 2000}
+            ),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        self._user = user
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned = super().clean()
+        order_ref = cleaned.get("order_ref")
+        quantity = cleaned.get("quantity")
+        qs = daily_sales_queryset_for_claim_user(self._user)
+        sale, err = resolve_daily_sale_from_ref(order_ref, qs)
+        if err:
+            raise ValidationError({"order_ref": err})
+        cleaned["daily_sale"] = sale
+
+        sold = int(sale.amount or 0)
+        if sold < 1:
+            raise ValidationError(
+                {"order_ref": "That sale has no units recorded; choose a sale with a quantity greater than zero."}
+            )
+        if quantity is not None:
+            q = int(quantity)
+            if q > sold:
+                raise ValidationError(
+                    {
+                        "quantity": (
+                            f"Cannot exceed units on this sale ({sold} for "
+                            f"{sale.product.name} at {sale.dealership.name})."
+                        )
+                    }
+                )
+        return cleaned
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.daily_sale = self.cleaned_data["daily_sale"]
+        if commit:
+            obj.save()
+        return obj
+
+
+class ClaimStatusForm(forms.Form):
+    """Staff / Management / Back Office: change workflow status on an existing claim."""
+
+    status = forms.ChoiceField(
+        label="Status",
+        choices=Claim.STATUS_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )

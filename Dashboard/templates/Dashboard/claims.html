@@ -3,39 +3,35 @@
 {% block title %}Claims | {{ block.super }}{% endblock title %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
 	<h1 class="mb-0">Claims</h1>
-	<span class="badge bg-warning text-dark">WIP</span>
 </div>
-
-<div class="ns-soft p-3 mb-4">
-	<h2 class="h5 mb-2">Heads up</h2>
-	<p class="text-muted small mb-0">
-		This page is WIP. It currently shows dummy rows and echoes your submission back
-		(without saving to the DB).
-	</p>
-</div>
+<p class="text-muted small mb-4">
+	Scope: <strong>{{ claims_scope_label }}</strong>
+	{% if request.ns_can_view_all_dealerships %}(all dealerships){% else %}(your dealership only){% endif %}
+</p>
 
 <div class="row">
-	<div class="col-lg-7 mb-4">
-		<div class="ns-card p-3 p-md-4 h-100">
-			<h2 class="h5 mb-3">Sample claims (dummy data)</h2>
-			{% if sample_claims %}
+	<div class="col-lg-8 mb-4">
+		<div class="card mb-0 h-100">
+			<div class="card-header fw-semibold">Submitted claims</div>
+			<div class="card-body p-0">
+			{% if claims_list %}
 			<div class="table-responsive">
 			<table class="table table-sm align-middle mb-0">
-				<thead>
+				<thead class="table-light">
 					<tr>
 						<th scope="col">Claim #</th>
 						<th scope="col">Status</th>
-						<th scope="col">Dealership</th>
-						<th scope="col">Product</th>
-						<th scope="col">Qty</th>
+						<th scope="col">Order #</th>
+						<th scope="col">Submitted</th>
+						<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
 					</tr>
 				</thead>
 				<tbody>
-					{% for c in sample_claims %}
+					{% for c in claims_list %}
 					<tr>
-						<td class="font-monospace">#{{ c.id }}</td>
+						<td class="font-monospace">#{{ c.pk }}</td>
 						<td>
 							{% if c.status == "pending" %}
 								<span class="badge bg-warning text-dark">Pending</span>
@@ -46,80 +42,72 @@
 							{% elif c.status == "received" %}
 								<span class="badge bg-info text-dark">Received</span>
 							{% else %}
-								<span class="badge bg-secondary">{{ c.status }}</span>
+								<span class="badge bg-secondary">{{ c.get_status_display }}</span>
 							{% endif %}
 						</td>
-						<td>{{ c.dealership.name }}</td>
-						<td>{{ c.product.name }}</td>
-						<td>{{ c.quantity }}</td>
+						<td class="font-monospace small">{{ c.daily_sale.display_order_number }}</td>
+						<td class="text-nowrap small">{{ c.date_submitted|date:"Y-m-d H:i" }}</td>
+						<td class="text-end text-nowrap">
+							<a href="{% url ns_site_namespace|add:':claim_detail' c.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+							{% if can_change_claim_status %}
+							<a href="{% url ns_site_namespace|add:':claim_detail' c.pk %}#update-claim-status" class="btn btn-sm btn-outline-secondary">Set status</a>
+							{% endif %}
+						</td>
 					</tr>
 					{% endfor %}
 				</tbody>
 			</table>
 			</div>
 			{% else %}
-				<p class="text-muted small mb-0">No dummy claims.</p>
+				<p class="text-muted small p-3 mb-0">No claims yet. Submit one using the form.</p>
 			{% endif %}
+			</div>
 		</div>
 	</div>
 
-	<div class="col-lg-5">
-		<div class="ns-card p-3 p-md-4 h-100">
-			<h2 class="h5 mb-3">Submit a claim (WIP stub)</h2>
-			<form method="post" action="">
-				{% csrf_token %}
+	<div class="col-lg-4">
+		<div class="card mb-0 h-100">
+			<div class="card-header fw-semibold">Submit a claim</div>
+			<div class="card-body">
+				<p class="text-muted small mb-3">
+					New claims are saved as <strong>Pending</strong>. The sale must already exist on the <strong>Sales</strong> page; dealership, product, and order line quantity come from that record.
+				</p>
+				<form method="post" action="">
+					{% csrf_token %}
+					{% if claim_form.non_field_errors %}
+						<div class="alert alert-danger">{{ claim_form.non_field_errors }}</div>
+					{% endif %}
 
-				<div class="mb-3">
-					<label class="form-label" for="id_customer_name">Customer name</label>
-					<input class="form-control" type="text" name="customer_name" id="id_customer_name" maxlength="200" placeholder="e.g. Jane Smith" />
-				</div>
+					<div class="mb-3">
+						<label class="form-label" for="{{ claim_form.customer_name.id_for_label }}">Customer name</label>
+						{{ claim_form.customer_name }}
+						{% if claim_form.customer_name.errors %}<div class="invalid-feedback d-block">{{ claim_form.customer_name.errors }}</div>{% endif %}
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_dealership_id">Dealership</label>
-					<select class="form-select" name="dealership_id" id="id_dealership_id">
-						<option value="">-- pick one --</option>
-						{% for d in dealerships %}
-							<option value="{{ d.pk }}">{{ d.name }}</option>
-						{% endfor %}
-					</select>
-				</div>
+					<div class="mb-3">
+						<label class="form-label" for="{{ claim_form.order_ref.id_for_label }}">Order number</label>
+						{{ claim_form.order_ref }}
+						{% if claim_form.order_ref.help_text %}<div class="form-text">{{ claim_form.order_ref.help_text }}</div>{% endif %}
+						{% if claim_form.order_ref.errors %}<div class="invalid-feedback d-block">{{ claim_form.order_ref.errors }}</div>{% endif %}
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_product_id">Product</label>
-					<select class="form-select" name="product_id" id="id_product_id">
-						<option value="">-- pick one --</option>
-						{% for p in products %}
-							<option value="{{ p.pk }}">{{ p.name }}</option>
-						{% endfor %}
-					</select>
-				</div>
+					<div class="mb-3">
+						<label class="form-label" for="{{ claim_form.quantity.id_for_label }}">Quantity (for this claim)</label>
+						{{ claim_form.quantity }}
+						<div class="form-text">Cannot exceed the units recorded on that sale.</div>
+						{% if claim_form.quantity.errors %}<div class="invalid-feedback d-block">{{ claim_form.quantity.errors }}</div>{% endif %}
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_order_number">Order number (stub)</label>
-					<input class="form-control" type="text" name="order_number" id="id_order_number" maxlength="50" placeholder="e.g. 000123" />
-				</div>
+					<div class="mb-3">
+						<label class="form-label" for="{{ claim_form.reason.id_for_label }}">Notes</label>
+						{{ claim_form.reason }}
+						{% if claim_form.reason.errors %}<div class="invalid-feedback d-block">{{ claim_form.reason.errors }}</div>{% endif %}
+					</div>
 
-				<div class="mb-3">
-					<label class="form-label" for="id_quantity">Quantity</label>
-					<input class="form-control" type="number" name="quantity" id="id_quantity" min="1" value="1" />
-				</div>
-
-				<div class="mb-3">
-					<label class="form-label" for="id_reason">Reason / notes</label>
-					<textarea class="form-control" name="reason" id="id_reason" rows="3" placeholder="Optional notes (stub)" maxlength="2000"></textarea>
-				</div>
-
-				<button type="submit" class="btn btn-primary w-100">Submit claim</button>
-			</form>
-
-			{% if submitted_stub_data %}
-				<div class="mt-3">
-					<h3 class="h6 mb-2">Submission echo</h3>
-					<pre class="bg-light border rounded p-2 mb-0" style="white-space: pre-wrap;">{{ submitted_stub_data }}</pre>
-				</div>
-			{% endif %}
+					<button type="submit" class="btn btn-primary w-100">Submit claim</button>
+				</form>
+			</div>
 		</div>
 	</div>
 </div>
 {% endblock content %}
-

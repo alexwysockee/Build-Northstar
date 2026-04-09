@@ -273,7 +273,7 @@ textarea.form-control {
   background-color: #495057 !important;
 }
 
-/* Sales tab: daily sales this month — embedded viewport: header + ~8 body rows, scroll the rest */
+/* Sales tab: sales this month table — embedded viewport: header + ~8 body rows, scroll the rest */
 .daily-sales-month-wrap {
   --daily-sales-thead: 2.875rem;
   /* Per-row budget for table-sm + two btn-sm; total ≈ header + 8 rows (tweak --daily-sales-row if needed) */
@@ -305,4 +305,32 @@ textarea.form-control {
   border-color: rgba(13, 110, 253, 0.18);
   font-weight: 700;
   box-shadow: 0 1px 0 var(--bs-border-color, #dee2e6);
+}
+
+/* Sales: Management-only all-time archive (compressed, scrollable body) */
+.management-sales-history-wrap {
+  max-height: 20rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm);
+}
+
+.management-sales-history-table {
+  font-size: 0.78rem;
+  margin-bottom: 0;
+}
+
+.management-sales-history-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: rgba(13, 110, 253, 0.08);
+  color: var(--theme-primary-dark);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 0 var(--bs-border-color, #dee2e6);
+  white-space: nowrap;
 }
