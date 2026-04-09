@@ -14,6 +14,68 @@ from django.utils import timezone
 
 LOW_STOCK_THRESHOLD = 5
 
+# Leaderboard / alert list caps (dashboard)
+TOP_SALES_LEADERBOARD_LIMIT = 10
+LOW_STOCK_ALERT_LIMIT = 25
+
+
+def user_can_view_all_inventory(user):
+    """True if user may see inventory for every dealership (staff/superuser/Management)."""
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+        return True
+    return user.groups.filter(name="Management").exists()
+
+
+def dealerships_for_inventory_scope(user):
+    """
+    Dealership list for inventory tables and low-stock alerts (matches views.inventory).
+    """
+    from .models import Dealership
+
+    if user_can_view_all_inventory(user):
+        return list(Dealership.objects.order_by("name"))
+    home = user_home_dealership(user)
+    return [home] if home else list(Dealership.objects.order_by("name"))
+
+
+def low_stock_alert_rows(user, max_rows=LOW_STOCK_ALERT_LIMIT):
+    """
+    Rows where on-hand is low or out (same thresholds as the inventory page).
+    Returns (rows, truncated) where each row is a dict with product, dealership,
+    quantity, status_label, badge_variant.
+    """
+    from .models import SalesProduct
+
+    physical = list(
+        SalesProduct.objects.filter(tracks_inventory=True).order_by("display_order", "id")
+    )
+    dealerships = dealerships_for_inventory_scope(user)
+    raw = []
+    for deal in dealerships:
+        for p in physical:
+            qty = quantity_on_hand(p, deal)
+            _key, status_label, badge_variant = inventory_status_tuple(qty)
+            if badge_variant in ("danger", "warning"):
+                raw.append(
+                    {
+                        "product": p,
+                        "dealership": deal,
+                        "quantity": qty,
+                        "status_label": status_label,
+                        "badge_variant": badge_variant,
+                    }
+                )
+
+    def sort_key(item):
+        sev = 0 if item["badge_variant"] == "danger" else 1
+        return (sev, item["quantity"], item["dealership"].name, item["product"].name)
+
+    raw.sort(key=sort_key)
+    truncated = len(raw) > max_rows
+    return raw[:max_rows], truncated
+
 
 def inventory_status_tuple(quantity: int):
     """Return (key, label, bootstrap_badge_class_suffix) for quantity."""

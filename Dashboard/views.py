@@ -13,12 +13,16 @@ from django.views.decorators.http import require_POST
 from .forms import ReportForm, EntryForm, SalesProductForm, DailySaleForm
 from .forms import InventoryRequestForm, ClaimForm, ClaimStatusForm, InspectionForm
 from .inventory_services import (
+    TOP_SALES_LEADERBOARD_LIMIT,
     apply_sale_delta,
     cancel_inventory_order,
+    dealerships_for_inventory_scope,
     fulfill_inventory_order,
     get_or_create_inventory_row,
-    quantity_on_hand,
     inventory_status_tuple,
+    low_stock_alert_rows,
+    quantity_on_hand,
+    user_can_view_all_inventory,
     user_home_dealership,
 )
 from .scope import user_can_view_all_dealerships
@@ -114,6 +118,50 @@ def index(request):
     daily_sales_scope = DailySale.objects.filter(date__year=y, date__month=m)
     if not can_view_all and home_dealership:
         daily_sales_scope = daily_sales_scope.filter(dealership=home_dealership)
+
+    top_product_agg = list(
+        daily_sales_scope.values("product_id")
+        .annotate(total=Sum("amount"))
+        .order_by("-total")[:TOP_SALES_LEADERBOARD_LIMIT]
+    )
+    product_ids = [r["product_id"] for r in top_product_agg if r.get("product_id")]
+    products_by_id = {p.id: p for p in SalesProduct.objects.filter(id__in=product_ids)}
+    top_product_rows = []
+    for rank, row in enumerate(top_product_agg, start=1):
+        pid = row.get("product_id")
+        prod = products_by_id.get(pid) if pid else None
+        if prod:
+            top_product_rows.append(
+                {
+                    "rank": rank,
+                    "name": prod.name,
+                    "units": int(row["total"] or 0),
+                }
+            )
+
+    show_dealership_leaderboard = can_view_all
+    top_dealership_rows = []
+    if can_view_all:
+        top_dealership_agg = list(
+            daily_sales_scope.values("dealership_id")
+            .annotate(total=Sum("amount"))
+            .order_by("-total")[:TOP_SALES_LEADERBOARD_LIMIT]
+        )
+        d_ids = [r["dealership_id"] for r in top_dealership_agg if r.get("dealership_id")]
+        dealerships_by_id = {d.id: d for d in Dealership.objects.filter(id__in=d_ids)}
+        for rank, row in enumerate(top_dealership_agg, start=1):
+            did = row.get("dealership_id")
+            deal = dealerships_by_id.get(did) if did else None
+            if deal:
+                top_dealership_rows.append(
+                    {
+                        "rank": rank,
+                        "name": deal.name,
+                        "units": int(row["total"] or 0),
+                    }
+                )
+
+    low_stock_alerts, low_stock_truncated = low_stock_alert_rows(request.user)
 
     sales_by_product_id = {
         row["product_id"]: (row["total"] or 0)
@@ -234,6 +282,11 @@ def index(request):
         "revenue_achieved": f"{revenue_achieved.quantize(Decimal('0.01'))}",
         "inventory_totals_png_b64": inventory_totals_png_b64,
         "revenue_scope_label": "Company Wide" if can_view_all else (home_dealership.name if home_dealership else "Dealership"),
+        "top_product_rows": top_product_rows,
+        "top_dealership_rows": top_dealership_rows,
+        "show_dealership_leaderboard": show_dealership_leaderboard,
+        "low_stock_alerts": low_stock_alerts,
+        "low_stock_truncated": low_stock_truncated,
     }
     return render(request, "Dashboard/index.html", context)
 
@@ -502,15 +555,6 @@ def sales_update_product(request, product_pk):
     return _redirect_sales(request)
 
 
-def _can_view_all_inventory(user):
-    """Managers/admin: see inventory for every dealership."""
-    if not user.is_authenticated:
-        return False
-    if _staff_or_superuser(user):
-        return True
-    return user.groups.filter(name="Management").exists()
-
-
 def _can_submit_inventory_order(user):
     """Sales Rep and Dealership User can submit stock requests."""
     if not user.is_authenticated:
@@ -553,7 +597,7 @@ def inventory(request):
     if not request.user.is_authenticated:
         return HttpResponseForbidden("You must be logged in.")
 
-    can_view_all = _can_view_all_inventory(request.user)
+    can_view_all = user_can_view_all_inventory(request.user)
     can_submit = _can_submit_inventory_order(request.user)
     can_manage_orders = _can_manage_inventory_orders(request.user)
 
@@ -564,12 +608,7 @@ def inventory(request):
     )
 
     home = user_home_dealership(request.user) if not can_view_all else None
-    if can_view_all:
-        dealerships = list(Dealership.objects.order_by("name"))
-    else:
-        # If a user has no assigned home dealership yet, show everything as a WIP fallback
-        # so the page remains usable.
-        dealerships = [home] if home else list(Dealership.objects.order_by("name"))
+    dealerships = dealerships_for_inventory_scope(request.user)
 
     dealership_sections = []
     for deal in dealerships:

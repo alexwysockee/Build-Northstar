@@ -9,6 +9,108 @@
 </p>
 <p>Dashboard for the C3 Digital Transformation System</p>
 
+<div class="row mb-4 align-items-start dashboard-leaderboard-row">
+	<div class="col-md-6 d-flex">
+		<div class="p-0 bg-white border rounded w-100 d-flex flex-column dashboard-leaderboard-panel">
+			<ul class="nav nav-tabs px-2 pt-2 flex-shrink-0" id="leaderboardTabs" role="tablist">
+				<li class="nav-item" role="presentation">
+					<button class="nav-link active" id="dealerships-leader-tab" data-bs-toggle="tab" data-bs-target="#dealerships-leader-pane" type="button" role="tab" aria-controls="dealerships-leader-pane" aria-selected="true">Top dealerships</button>
+				</li>
+				<li class="nav-item" role="presentation">
+					<button class="nav-link" id="products-leader-tab" data-bs-toggle="tab" data-bs-target="#products-leader-pane" type="button" role="tab" aria-controls="products-leader-pane" aria-selected="false">Top products</button>
+				</li>
+			</ul>
+			<div class="tab-content p-3 border-top bg-white flex-grow-1" id="leaderboardTabsContent">
+				<div class="tab-pane fade show active h-100" id="dealerships-leader-pane" role="tabpanel" aria-labelledby="dealerships-leader-tab" tabindex="0">
+					{% if show_dealership_leaderboard %}
+						{% if top_dealership_rows %}
+							<table class="table table-sm mb-0">
+								<caption class="text-muted small">Units sold this month (same scope as dashboard)</caption>
+								<thead>
+									<tr>
+										<th scope="col">#</th>
+										<th scope="col">Dealership</th>
+										<th scope="col" class="text-end">Units</th>
+									</tr>
+								</thead>
+								<tbody>
+								{% for row in top_dealership_rows %}
+									<tr>
+										<td>{{ row.rank }}</td>
+										<td>{{ row.name }}</td>
+										<td class="text-end">{{ row.units }}</td>
+									</tr>
+								{% endfor %}
+								</tbody>
+							</table>
+						{% else %}
+							<p class="text-muted small mb-0">No dealership sales recorded for this month yet.</p>
+						{% endif %}
+					{% else %}
+						<p class="text-muted small mb-0">Top dealerships are available in the company-wide dashboard (management portal).</p>
+					{% endif %}
+				</div>
+				<div class="tab-pane fade h-100" id="products-leader-pane" role="tabpanel" aria-labelledby="products-leader-tab" tabindex="0">
+					{% if top_product_rows %}
+						<table class="table table-sm mb-0">
+							<caption class="text-muted small">Units sold this month (same scope as dashboard)</caption>
+							<thead>
+								<tr>
+									<th scope="col">#</th>
+									<th scope="col">Product</th>
+									<th scope="col" class="text-end">Units</th>
+								</tr>
+							</thead>
+							<tbody>
+							{% for row in top_product_rows %}
+								<tr>
+									<td>{{ row.rank }}</td>
+									<td>{{ row.name }}</td>
+									<td class="text-end">{{ row.units }}</td>
+								</tr>
+							{% endfor %}
+							</tbody>
+						</table>
+					{% else %}
+						<p class="text-muted small mb-0">No product sales recorded for this month yet.</p>
+					{% endif %}
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-6 d-flex flex-column dashboard-alerts-column">
+		<div class="card h-100 border w-100 flex-grow-1 d-flex flex-column mb-0">
+			<div class="card-header fw-semibold flex-shrink-0">Alerts</div>
+			<div class="card-body d-flex flex-column flex-grow-1 py-3" style="min-height: 0;">
+				<p class="small text-muted mb-2 flex-shrink-0">Low or out-of-stock inventory (physical products).</p>
+				<div class="flex-grow-1 overflow-auto pe-1" style="min-height: 0;">
+					{% if low_stock_alerts %}
+						<ul class="list-unstyled small mb-0">
+							{% for alert in low_stock_alerts %}
+								<li class="mb-2 pb-2 border-bottom">
+									<span class="fw-semibold">{{ alert.product.name }}</span>
+									<span class="text-muted">@ {{ alert.dealership.name }}</span>
+									<br />
+									<span class="badge {% if alert.badge_variant == 'danger' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ alert.status_label }}</span>
+									<span class="text-muted">({{ alert.quantity }} on hand)</span>
+								</li>
+							{% endfor %}
+						</ul>
+					{% else %}
+						<p class="text-muted small mb-0">No low-stock items in your inventory scope.</p>
+					{% endif %}
+				</div>
+				<div class="flex-shrink-0 pt-3 mt-2 border-top">
+					{% if low_stock_truncated %}
+						<p class="small text-muted mb-2">Showing the first alerts. See the full list on Inventory.</p>
+					{% endif %}
+					<a href="{% url ns_site_namespace|add:':inventory' %}" class="btn btn-sm btn-outline-primary">Open Inventory</a>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
 <div class="row">
 	<div class="col-md-6">
 <table class="table">
@@ -91,5 +193,34 @@
 		</div>
 	</div>
 </div>
+
+<script>
+(function () {
+	const row = document.querySelector(".dashboard-leaderboard-row");
+	const left = document.querySelector(".dashboard-leaderboard-panel");
+	const right = document.querySelector(".dashboard-alerts-column");
+	if (!row || !left || !right) {
+		return;
+	}
+	const mq = window.matchMedia("(min-width: 768px)");
+
+	function syncDashboardTopHeights() {
+		if (!mq.matches) {
+			right.style.height = "";
+			return;
+		}
+		right.style.height = left.getBoundingClientRect().height + "px";
+	}
+
+	syncDashboardTopHeights();
+	window.addEventListener("resize", syncDashboardTopHeights);
+	if (typeof ResizeObserver !== "undefined") {
+		new ResizeObserver(syncDashboardTopHeights).observe(left);
+	}
+	document.querySelectorAll("#leaderboardTabs [data-bs-toggle='tab']").forEach(function (el) {
+		el.addEventListener("shown.bs.tab", syncDashboardTopHeights);
+	});
+})();
+</script>
 
 {% endblock content %}

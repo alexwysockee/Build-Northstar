@@ -5,6 +5,85 @@ from django.utils import timezone
 from Profile.models import UserProfile
 from .models import Claim, Dealership, Inspection, SalesProduct, ProductInventory, DailySale
 
+
+class DashboardIndexLeaderboardTests(TestCase):
+    """Top dealerships/products and low-stock alerts on the main dashboard."""
+
+    def setUp(self):
+        self.today = timezone.localdate()
+        self.dealer_high = Dealership.objects.create(name="AAA High Volume")
+        self.dealer_low = Dealership.objects.create(name="ZZZ Low Volume")
+        self.product_a = SalesProduct.objects.create(name="Alpha Coat", tracks_inventory=True)
+        self.product_b = SalesProduct.objects.create(name="Beta Shield", tracks_inventory=True)
+        self.sales_rep = User.objects.create_user(username="rep_lb", password="password")
+        self.sales_rep.groups.add(Group.objects.get_or_create(name="Sales Rep")[0])
+
+    def test_top_dealerships_order_company_wide(self):
+        """Management portal: dealerships ranked by units sold this month."""
+        DailySale.objects.create(
+            product=self.product_a,
+            dealership=self.dealer_low,
+            date=self.today,
+            amount=3,
+        )
+        DailySale.objects.create(
+            product=self.product_b,
+            dealership=self.dealer_high,
+            date=self.today,
+            amount=20,
+        )
+        mgr = User.objects.create_user(username="dash_mgr", password="password")
+        mgr.groups.add(Group.objects.get_or_create(name="Management")[0])
+        self.client.login(username="dash_mgr", password="password")
+        response = self.client.get("/home/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        idx_high = content.find("AAA High Volume")
+        idx_low = content.find("ZZZ Low Volume")
+        self.assertGreater(idx_high, 0)
+        self.assertGreater(idx_low, 0)
+        self.assertLess(idx_high, idx_low)
+
+    def test_top_products_scoped_to_home_dealership(self):
+        """Dealership user sees top products only for their home dealership."""
+        UserProfile.objects.create(user=self.sales_rep, dealership=self.dealer_high)
+        DailySale.objects.create(
+            product=self.product_a,
+            dealership=self.dealer_high,
+            date=self.today,
+            amount=4,
+        )
+        DailySale.objects.create(
+            product=self.product_a,
+            dealership=self.dealer_low,
+            date=self.today,
+            amount=999,
+        )
+        self.client.login(username="rep_lb", password="password")
+        response = self.client.get("/home/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Alpha Coat")
+        self.assertContains(response, "Top products")
+        self.assertNotContains(response, "999")
+
+    def test_low_stock_alert_on_dashboard(self):
+        ProductInventory.objects.create(
+            product=self.product_a,
+            dealership=self.dealer_high,
+            quantity=2,
+        )
+        admin = User.objects.create_superuser(
+            username="dash_admin_ls",
+            password="password",
+            email="dash@test.com",
+        )
+        self.client.login(username="dash_admin_ls", password="password")
+        response = self.client.get("/home/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Low")
+        self.assertContains(response, "Alpha Coat")
+        self.assertContains(response, "AAA High Volume")
+
 class C3SystemTestSuite(TestCase):
     """
     Developer Test Artifact: Construction Phase
@@ -28,7 +107,8 @@ class C3SystemTestSuite(TestCase):
         self.client.login(username='guest', password='password')
         # Combined prefix 'home/' + dashboard path 'sales/add-daily/'
         response = self.client.post('/home/sales/add-daily/', {'amount': 5})
-        self.assertEqual(response.status_code, 403)
+        # Logged-in users without sales role are redirected back to Sales with a message (not 403).
+        self.assertEqual(response.status_code, 302)
 
     def test_inventory_integration(self):
         """Technique 3: Verify Sales entry reduces physical Inventory"""
