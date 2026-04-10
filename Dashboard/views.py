@@ -83,6 +83,46 @@ def _sales_month_today():
     return d.year, d.month
 
 
+def _monthly_daily_sale_scope(request):
+    """
+    DailySale queryset for the current calendar month, with the same dealership scope
+    as the dashboard (company-wide vs home dealership).
+    """
+    y, m = _sales_month_today()
+    can_view_all = user_can_view_all_dealerships(request.user)
+    home_dealership = getattr(request, "ns_dealership", None)
+    qs = DailySale.objects.filter(date__year=y, date__month=m)
+    if not can_view_all and home_dealership:
+        qs = qs.filter(dealership=home_dealership)
+    return y, m, can_view_all, home_dealership, qs
+
+
+def _sales_totals_by_product_id(daily_sale_qs):
+    """Map SalesProduct pk -> units sold (sum of amount) for the given queryset."""
+    return {
+        row["product_id"]: int(row["total"] or 0)
+        for row in daily_sale_qs.values("product_id").annotate(total=Sum("amount"))
+    }
+
+
+def _c3_product_performance_rows(sales_products, totals_by_product_id, dealership_count):
+    """One row per product: same snapshot as dashboard (sales_this_month, goal_pct, goal_units)."""
+    rows = []
+    for p in sales_products:
+        sales_this_month = int(totals_by_product_id.get(p.id, 0) or 0)
+        goal_units = int(p.goal or 0) * int(dealership_count or 1)
+        goal_pct = round((sales_this_month / goal_units) * 100) if goal_units else None
+        rows.append(
+            {
+                "product": p,
+                "sales_this_month": sales_this_month,
+                "goal_pct": goal_pct,
+                "goal_units": goal_units,
+            }
+        )
+    return rows
+
+
 def _redirect_sales(request):
     """Return to Sales on the same site (/home vs /mgmt) the request came from."""
     ns = getattr(request, "ns_site_namespace", None) or "Dashboard"
@@ -107,17 +147,11 @@ def index(request):
     """The Dashboard for C3."""
     sales_products = list(SalesProduct.objects.all())
 
-    y, m = _sales_month_today()
-    can_view_all = user_can_view_all_dealerships(request.user)
-    home_dealership = getattr(request, "ns_dealership", None)
+    y, m, can_view_all, home_dealership, daily_sales_scope = _monthly_daily_sale_scope(request)
     if not can_view_all and not home_dealership:
         return HttpResponseForbidden("No dealership is assigned to your user.")
 
     dealership_count = Dealership.objects.count() if can_view_all else 1
-
-    daily_sales_scope = DailySale.objects.filter(date__year=y, date__month=m)
-    if not can_view_all and home_dealership:
-        daily_sales_scope = daily_sales_scope.filter(dealership=home_dealership)
 
     top_product_agg = list(
         daily_sales_scope.values("product_id")
@@ -163,36 +197,25 @@ def index(request):
 
     low_stock_alerts, low_stock_truncated = low_stock_alert_rows(request.user)
 
-    sales_by_product_id = {
-        row["product_id"]: (row["total"] or 0)
-        for row in daily_sales_scope
-        .values("product_id")
-        .annotate(total=Sum("amount"))
-    }
+    sales_by_product_id = _sales_totals_by_product_id(daily_sales_scope)
 
-    dashboard_rows = []
+    dashboard_rows = _c3_product_performance_rows(
+        sales_products, sales_by_product_id, dealership_count
+    )
+
     revenue_goal = Decimal("0")
     revenue_achieved = Decimal("0")
 
-    for p in sales_products:
-        sales_this_month = int(sales_by_product_id.get(p.id, 0) or 0)
-        goal_units = int(p.goal or 0) * int(dealership_count or 1)
-        goal_pct = round((sales_this_month / goal_units) * 100) if goal_units else None
-
-        dashboard_rows.append(
-            {
-                "product": p,
-                "sales_this_month": sales_this_month,
-                "goal_pct": goal_pct,
-            }
-        )
-
+    for row in dashboard_rows:
+        p = row["product"]
+        sales_this_month = row["sales_this_month"]
+        goal_units = row["goal_units"]
         # Revenue progress uses the current scope:
         # - dealership portal: goal is per-dealership
         # - management portal: goal is company-wide (sum of dealership goals)
         # Do NOT cap achieved revenue at the unit goal; if you exceed goal, % should exceed 100%.
         price = p.price or Decimal("0")
-        revenue_goal += Decimal(int(p.goal or 0) * int(dealership_count or 1)) * price
+        revenue_goal += Decimal(goal_units) * price
         revenue_achieved += Decimal(sales_this_month) * price
 
     if revenue_goal > 0:
@@ -302,43 +325,23 @@ def product(request, product_id):
 
 def sales(request):
     """Sales tab with editable C3 Product Performance table (sales this month)."""
-    products = SalesProduct.objects.all()
-    y, m = _sales_month_today()
-    can_view_all = user_can_view_all_dealerships(request.user)
-    home_dealership = getattr(request, "ns_dealership", None)
+    products = list(SalesProduct.objects.all())
+    y, m, can_view_all, home_dealership, daily_sales_scope = _monthly_daily_sale_scope(request)
     if not can_view_all and not home_dealership:
         return HttpResponseForbidden("No dealership is assigned to your user.")
 
     dealership_count = Dealership.objects.count() if can_view_all else 1
 
-    daily_sales_qs = DailySale.objects.filter(
-        date__year=y,
-        date__month=m,
-    ).select_related("product", "dealership", "entered_by").order_by("-date", "-id")
+    daily_sales_qs = daily_sales_scope.select_related(
+        "product", "dealership", "entered_by"
+    ).order_by("-date", "-id")
 
-    if not can_view_all and home_dealership:
-        daily_sales_qs = daily_sales_qs.filter(dealership=home_dealership)
-
-    sales_totals = {
-        row["product_id"]: int(row["total"] or 0)
-        for row in daily_sales_qs.values("product_id").annotate(total=Sum("amount"))
-    }
-
-    product_rows = []
-    for p in products:
-        sales_this_month = int(sales_totals.get(p.id, 0) or 0)
-        goal_units = int(p.goal or 0) * int(dealership_count or 1)
-        goal_pct = round((sales_this_month / goal_units) * 100) if goal_units else None
-        product_rows.append(
-            {
-                "product": p,
-                "sales_this_month": sales_this_month,
-                "goal_pct": goal_pct,
-            }
-        )
+    sales_totals = _sales_totals_by_product_id(daily_sales_scope)
+    product_rows = _c3_product_performance_rows(products, sales_totals, dealership_count)
 
     context = {
         "product_rows": product_rows,
+        "sales_snapshot_dealership_count": dealership_count,
         "daily_sales_this_month": daily_sales_qs,
         "add_form": SalesProductForm(),
         "add_daily_form": DailySaleForm(user=request.user),

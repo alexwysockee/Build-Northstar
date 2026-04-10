@@ -130,7 +130,7 @@
 		<td>${{ row.product.price }}</td>
 		<td>{{ row.sales_this_month }}</td>
 		<td>
-			<span class="badge {% if row.goal_pct is None %}bg-secondary{% elif row.goal_pct >= 90 %}bg-success{% elif row.goal_pct >= 70 %}bg-warning{% else %}bg-danger{% endif %}" title="{{ row.sales_this_month }}/{{ row.product.goal }}">
+			<span class="badge {% if row.goal_pct is None %}bg-secondary{% elif row.goal_pct >= 90 %}bg-success{% elif row.goal_pct >= 70 %}bg-warning{% else %}bg-danger{% endif %}" title="{{ row.sales_this_month }}/{{ row.goal_units }}">
 				{% if row.goal_pct is not None %}{{ row.goal_pct }}%{% else %}—{% endif %}
 			</span>
 		</td>

@@ -5,7 +5,7 @@
 
 <h1 class="mb-3">Sales</h1>
 
-<table class="table" id="snapshot-table">
+<table class="table" id="snapshot-table" data-goal-dealership-count="{{ sales_snapshot_dealership_count|default:1 }}">
 	<caption>C3 Product Performance Snapshot (Sales This Month)</caption>
 	<thead>
 	<tr>
@@ -29,7 +29,7 @@
 		<input type="number" name="goal" class="form-control form-control-sm editable-num" data-field="goal" value="{{ row.product.goal }}" min="1" style="width:4rem;" form="update-form-{{ row.product.pk }}">
 		</td>
 		<td>
-		<span class="badge goal-badge" title="{{ row.sales_this_month }}/{{ row.product.goal }}">
+		<span class="badge goal-badge" title="{{ row.sales_this_month }}/{{ row.goal_units }}">
 			{% if row.goal_pct is not None %}{{ row.goal_pct }}%{% else %}—{% endif %}
 			</span>
 		</td>
@@ -160,21 +160,26 @@
 
 <script>
 (function() {
+	var snapshotTable = document.getElementById('snapshot-table');
+	var goalDealershipCount = snapshotTable
+		? (parseInt(snapshotTable.getAttribute('data-goal-dealership-count'), 10) || 1)
+		: 1;
 	function updateGoalBadge(row) {
 		var sales = parseInt(row.getAttribute('data-sales-this-month'), 10) || 0;
 		var goalInput = row.querySelector('input[data-field="goal"]');
 		var badge = row.querySelector('.goal-badge');
 		if (!goalInput || !badge) return;
 		var goal = parseInt(goalInput.value, 10) || 0;
-		if (goal <= 0) {
+		var goalUnits = goal * goalDealershipCount;
+		if (goal <= 0 || goalUnits <= 0) {
 			badge.textContent = '—';
 			badge.title = sales + '/0';
 			badge.className = 'badge goal-badge bg-secondary';
 			return;
 		}
-		var pct = Math.round((sales / goal) * 100);
+		var pct = Math.round((sales / goalUnits) * 100);
 		badge.textContent = pct + '%';
-		badge.title = sales + '/' + goal;
+		badge.title = sales + '/' + goalUnits;
 		badge.className = 'badge goal-badge ';
 		if (pct >= 90) badge.classList.add('bg-success');
 		else if (pct >= 70) badge.classList.add('bg-warning');
